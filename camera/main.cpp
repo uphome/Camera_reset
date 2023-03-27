@@ -25,7 +25,7 @@ struct key_img
 };
 
 void feature_points(Mat met,struct key_img &fe_point)
-{
+{ met.resize(480,640);
   fe_point.image= met;
   Mat image_key;
   Mat dest;
@@ -65,7 +65,7 @@ vector<vector<cv::Point2f>> matching(struct key_img new_image, struct key_img ol
   vector<DMatch>goodfeatur;
   for (int i =0;i<matchpoints.size();i++)
   {
-    if (matchpoints[i][0].distance<0.7*matchpoints[i][1].distance)
+    if ((matchpoints[i][0].distance<0.1*matchpoints[i][1].distance)&&(matchpoints[i][1].distance<=350))
     {
       goodfeatur.push_back(matchpoints[i][0]);
 
@@ -124,7 +124,7 @@ vector<Mat> calmatrix(vector<vector<cv::Point2f>> mpoint)
 void drawing(MatrixXf result,struct key_img img)
 {
   MatrixXf test(4,4);
-  test<<0,1,0,1,0,0,1,1,0,0,0,0,1,1,1,1;
+  test << 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1;
   Mat resut;
   namedWindow("最终结果",WINDOW_NORMAL);
 resizeWindow("最终结果",500,500);
@@ -132,11 +132,8 @@ resizeWindow("最终结果",500,500);
   line(img.image,Point(result(0,1)*100+img.image.cols/2,result(1,1)*100+img.image.rows/2),Point(result(0,2)*100+img.image.cols/2,result(1,2)*100+img.image.rows/2),Scalar(0, 255, 0),10);
   line(img.image,Point(result(0,2)*100+img.image.cols/2,result(1,2)*100+img.image.rows/2),Point(result(0,3)*100+img.image.cols/2,result(1,3)*100+img.image.rows/2),Scalar(0, 255, 255),10);
   line(img.image,Point(result(0,3)*100+img.image.cols/2,result(1,3)*100+img.image.rows/2),Point(result(0,0)*100+img.image.cols/2,result(1,0)*100+img.image.rows/2),Scalar(0, 255, 255),10);
-  /*cout<<result(0,0)<<"    "<<result(1,0)<<endl;
-  cout<<result(0,1)<<"    "<<result(1,1)<<endl;
-  cout<<result(0,2)<<"    "<<result(1,2)<<endl;
-  cout<<result(0,3)<<"    "<<result(1,3)<<endl;*/
-  //rectangle(img.image, Point(img.image.cols/2,img.image.rows/2), Point(img.image.cols/2+100,img.image.rows/2+100), Scalar(0, 0, 255),10);
+  //rectangle(img.image, Point(img.image.cols/2+100,img.image.rows/2+100), Point(img.image.cols/2,img.image.rows/2), Scalar(0, 0, 255),5);
+  rectangle(img.image, Point(img.image.cols/2,img.image.rows/2), Point(img.image.cols/2+100,img.image.rows/2+100), Scalar(0, 0, 255),5);
  imshow("最终结果",img.image);
 
 
@@ -157,12 +154,13 @@ int main() {
 
   Mat frame;
   VideoCapture capture;
-  capture.open("http://admin:123456@192.168.1.105:8081");
+  //capture.open("http://admin:123456@192.168.1.105:8081");
 
 
     Mat K = (Mat_<double>(3, 3) << 477.7987, 0, 323.1992, 0, 477.4408, 240.1797, 0, 0, 1);
-    Mat image_address_new = imread( "/home/hu/CLionProjects/camera/image_test/old.jpg");
-    Mat image_address_old = imread( "/home/hu/CLionProjects/camera/image_test/old.jpg");
+    Mat image_address_new = imread( "/home/hu/桌面/UPAN/CLionProjects/untitled/cmake-build-debug/F__downloads_003.png");
+    Mat image_address_old = imread( "/home/hu/桌面/UPAN/CLionProjects/untitled/cmake-build-debug/F__downloads_003.png");
+  // /home/hu/桌面/UPAN/CLionProjects/untitled/cmake-build-debug/F__downloads_001.png
     feature_points(image_address_new, nimage);
     feature_points(image_address_old, oimage);
     mPoint = matching(nimage, oimage);
@@ -176,7 +174,7 @@ int main() {
     transfrom.col(3) << Pose[1].at<double>(0, 0), Pose[1].at<double>(1, 0), Pose[1].at<double>(2, 0), 1;
     cout << test * transfrom << endl;
     result = transfrom * test;
-    drawing(result, oimage);
+    drawing(result, nimage);
     cout << result << endl;
     waitKey(1);
   }

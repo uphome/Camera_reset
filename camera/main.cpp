@@ -4,6 +4,7 @@
 #include <string>
 #include <Eigen/Core>
 #include <Eigen/Dense>
+#include<opencv2/opencv.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/features2d.hpp>
@@ -23,9 +24,9 @@ struct key_img
 
 };
 
-void feature_points(string address,struct key_img &fe_point)
+void feature_points(Mat met,struct key_img &fe_point)
 {
-  fe_point.image= imread(address);
+  fe_point.image= met;
   Mat image_key;
   Mat dest;
   Ptr<ORB> orb = ORB::create();
@@ -125,18 +126,18 @@ void drawing(MatrixXf result,struct key_img img)
   MatrixXf test(4,4);
   test<<0,1,0,1,0,0,1,1,0,0,0,0,1,1,1,1;
   Mat resut;
-  namedWindow("匹配结果",WINDOW_NORMAL);
-resizeWindow("匹配结果",500,500);
+  namedWindow("最终结果",WINDOW_NORMAL);
+resizeWindow("最终结果",500,500);
   line(img.image,Point(result(0,0)*100+img.image.cols/2,result(1,0)*100+img.image.rows/2),Point(result(0,1)*100+img.image.cols/2,result(1,1)*100+img.image.rows/2),Scalar(0, 255, 0),10);
-  line(img.image,Point(result(0,0)*100+img.image.cols/2,result(1,0)*100+img.image.rows/2),Point(result(0,2)*100+img.image.cols/2,result(1,2)*100+img.image.rows/2),Scalar(0, 255, 0),10);
-  line(img.image,Point(result(1,2)*100+img.image.cols/2,result(1,2)*100+img.image.rows/2),Point(result(0,1)*100+img.image.cols/2,result(1,1)*100+img.image.rows/2),Scalar(0, 255, 255),10);
-  line(img.image,Point(result(1,2)*100+img.image.cols/2,result(1,2)*100+img.image.rows/2),Point(result(0,2)*100+img.image.cols/2,result(1,2)*100+img.image.rows/2),Scalar(0, 255, 255),10);
-  cout<<result(0,0)<<"----"<<result(1,0)<<endl;
-  cout<<result(0,1)<<"----"<<result(1,1)<<endl;
-  cout<<result(1,2)<<"----"<<result(1,2)<<endl;
-  cout<<result(0,2)<<"----"<<result(1,2)<<endl;
+  line(img.image,Point(result(0,1)*100+img.image.cols/2,result(1,1)*100+img.image.rows/2),Point(result(0,2)*100+img.image.cols/2,result(1,2)*100+img.image.rows/2),Scalar(0, 255, 0),10);
+  line(img.image,Point(result(0,2)*100+img.image.cols/2,result(1,2)*100+img.image.rows/2),Point(result(0,3)*100+img.image.cols/2,result(1,3)*100+img.image.rows/2),Scalar(0, 255, 255),10);
+  line(img.image,Point(result(0,3)*100+img.image.cols/2,result(1,3)*100+img.image.rows/2),Point(result(0,0)*100+img.image.cols/2,result(1,0)*100+img.image.rows/2),Scalar(0, 255, 255),10);
+  /*cout<<result(0,0)<<"    "<<result(1,0)<<endl;
+  cout<<result(0,1)<<"    "<<result(1,1)<<endl;
+  cout<<result(0,2)<<"    "<<result(1,2)<<endl;
+  cout<<result(0,3)<<"    "<<result(1,3)<<endl;*/
   //rectangle(img.image, Point(img.image.cols/2,img.image.rows/2), Point(img.image.cols/2+100,img.image.rows/2+100), Scalar(0, 0, 255),10);
- imshow("匹配结果",img.image);
+ imshow("最终结果",img.image);
 
 
 waitKey(0);
@@ -144,36 +145,38 @@ system("pause");
 
 }
 
-int main()
-{
-
-  MatrixXd rect_matrix(4,4);
-  MatrixXf transfrom(4,4);
-  rect_matrix<<1,0,1,0,0,1,1,1,0,0,0,0,1,1,1,1;
-  Mat K =(Mat_<double>(3,3)<<477.7987,0,323.1992,0,477.4408,240.1797,0,0,1);
-  string image_address_new="/home/hu/CLionProjects/camera/image_test/new.jpg";
-  string image_address_old="/home/hu/CLionProjects/camera/image_test/new.jpg";
-  key_img oimage,nimage;
-  feature_points(image_address_new,nimage);
-  feature_points(image_address_old,oimage);
+int main() {
+  MatrixXf transfrom(4, 4);
+  key_img oimage, nimage;
   vector<vector<Point2f>> mPoint;// [0] 为new [1] 为old；
-  mPoint=matching(nimage,oimage);
   vector<Mat> Pose;
-  Pose= calmatrix(mPoint);
-  cout<<"R 为"<<endl;
-  /*cout<<Pose[0].at<double>(0,3)<<endl;
-  cout<<Pose[0]<<endl;*/
-  MatrixXf test(4,4);
-  test<<0,1,0,1,0,0,1,1,0,0,0,0,1,1,1,1;
+  MatrixXf test(4, 4);
+  test << 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1;
   transfrom.setZero();
-  transfrom.block<3,3>(0,0)<<Pose[0].at<double>(0,0),Pose[0].at<double>(0,1),Pose[0].at<double>(0,2),
-          Pose[0].at<double>(1,0),Pose[0].at<double>(1,1),Pose[0].at<double>(1,2),
-          Pose[0].at<double>(2,0),Pose[0].at<double>(2,1),Pose[0].at<double>(2,2);
-  transfrom.col(3)<<Pose[1].at<double>(0,0),Pose[1].at<double>(1,0),Pose[1].at<double>(2,0),1;
+  MatrixXf result(4, 4);
 
-  //cout<<test*transfrom<<endl;
-  MatrixXf result(4,4);
-  result=test*transfrom;
-  drawing(result,oimage);
-  cout<<result<<endl;
-}
+  Mat frame;
+  VideoCapture capture;
+  capture.open("http://admin:123456@192.168.1.105:8081");
+
+
+    Mat K = (Mat_<double>(3, 3) << 477.7987, 0, 323.1992, 0, 477.4408, 240.1797, 0, 0, 1);
+    Mat image_address_new = imread( "/home/hu/CLionProjects/camera/image_test/old.jpg");
+    Mat image_address_old = imread( "/home/hu/CLionProjects/camera/image_test/old.jpg");
+    feature_points(image_address_new, nimage);
+    feature_points(image_address_old, oimage);
+    mPoint = matching(nimage, oimage);
+    Pose = calmatrix(mPoint);
+    cout << "R 为" << endl;
+    cout << Pose[0] << endl;
+    cout << test << endl;
+    transfrom.block<3, 3>(0, 0) << Pose[0].at<double>(0, 0), Pose[0].at<double>(0, 1), Pose[0].at<double>(0, 2),
+        Pose[0].at<double>(1, 0), Pose[0].at<double>(1, 1), Pose[0].at<double>(1, 2),
+        Pose[0].at<double>(2, 0), Pose[0].at<double>(2, 1), Pose[0].at<double>(2, 2);
+    transfrom.col(3) << Pose[1].at<double>(0, 0), Pose[1].at<double>(1, 0), Pose[1].at<double>(2, 0), 1;
+    cout << test * transfrom << endl;
+    result = transfrom * test;
+    drawing(result, oimage);
+    cout << result << endl;
+    waitKey(1);
+  }

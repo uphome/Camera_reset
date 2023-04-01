@@ -4,6 +4,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <string>
+#include "opencv2/viz.hpp"
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include<opencv2/opencv.hpp>
@@ -14,6 +15,7 @@
 #include <cassert>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/core/eigen.hpp>
 using namespace ::std;
 using namespace ::cv;
 using namespace ::Eigen;
@@ -66,9 +68,11 @@ void feature_points(Mat met,struct key_img &fe_point)
 
   }*/
   drawKeypoints(fe_point.image, fe_point.key_point, fe_point.image_key, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
+/*
   cv::namedWindow("图上的特征点", CV_WINDOW_NORMAL);
   imshow("图上的特征点",fe_point.image_key);
   waitKey();
+*/
 
 }
 
@@ -117,9 +121,11 @@ vector<vector<cv::Point2f>> matching(struct key_img new_image, struct key_img ol
   drawKeypoints(new_image.image,new_image.key_point,new_image.image);
 
 
+/*
   namedWindow("匹配结果",WINDOW_NORMAL);
   resizeWindow("匹配结果",500,500);
-  imshow("匹配结果",result_img);
+  cv::imshow("匹配结果",result_img);
+*/
 
   waitKey(0);
  // system("pause");
@@ -130,7 +136,7 @@ vector<vector<cv::Point2f>> matching(struct key_img new_image, struct key_img ol
 vector<Mat> calmatrix(vector<vector<cv::Point2f>> mpoint)
 { Mat R,t;
   Point2f pricipal(323.1992,240.1797);
-  double focal=477.7987;
+  float focal=477.7987;
   Mat ess_matrix;
   ess_matrix =findEssentialMat(mpoint[0],mpoint[1],focal,pricipal);
   /*cout<<"本质矩阵为"<<endl;
@@ -157,7 +163,7 @@ void drawing(MatrixXf result,struct key_img img)
   Mat resut;
 
   namedWindow("最终结果",WINDOW_NORMAL);
-resizeWindow("最终结果",500,500);
+  resizeWindow("最终结果",500,500);
   line(img.image,Point(result(0,0)*100+img.image.cols/2,result(1,0)*100+img.image.rows/2),Point(result(0,1)*100+img.image.cols/2,result(1,1)*100+img.image.rows/2),Scalar(0, 255, 0),10);
   line(img.image,Point(result(0,1)*100+img.image.cols/2,result(1,1)*100+img.image.rows/2),Point(result(0,2)*100+img.image.cols/2,result(1,2)*100+img.image.rows/2),Scalar(0, 255, 0),10);
   line(img.image,Point(result(0,2)*100+img.image.cols/2,result(1,2)*100+img.image.rows/2),Point(result(0,3)*100+img.image.cols/2,result(1,3)*100+img.image.rows/2),Scalar(0, 255, 255),10);
@@ -173,11 +179,28 @@ system("pause");
 }
 
 
-void drawing_rot(Matrix3d R)
+void drawing_rot(vector<Mat>Pose,struct key_img oimg,struct key_img nimg)
 {
   Vector3d euler;
-  euler=R.eulerAngles(2,1,0);  // ZYX顺序，即先绕x轴roll,再绕y轴pitch,最后绕z轴yaw,0表示X轴,1表示Y轴,2表示Z轴
-  cout<<euler<<endl;
+  //euler=Pose[1].eulerAngles(2,1,0);  // ZYX顺序，即先绕x轴roll,再绕y轴pitch,最后绕z轴yaw,0表示X轴,1表示Y轴,2表示Z轴
+  viz::Viz3d window("camere pose");
+  Matx33f K(477.7987, 0, 323.1992, 0, 477.4408, 240.1797, 0, 0, 1); // 内参矩阵
+  viz::Camera mainCamera(K,Size(640,480)); //初始化
+  cout<<Mat::eye(3,3,CV_32F)<<endl;
+
+  viz::WCameraPosition camparmo(mainCamera.getFov(),oimg.image,1.0,viz::Color::white()); // 参数设置
+  //cv::Affine3f camPosition(Mat::eye(3,3,CV_32F),Vec3f(0,0,0));
+  cv::Affine3f camPosition(Matx33f (1,0,0,0,1,0,0,0,1),Vec3f(0,0,0));
+  //window.showWidget("Coordinate",viz::WCoordinateSystem(),cv::Affine3f::Identity());
+
+
+
+  viz::WCameraPosition camparmn(mainCamera.getFov(),nimg.image,1.0,viz::Color::green());
+  cv::Affine3d camPosition_2(Pose[0],Pose[1]);
+  window.showWidget("oldimage",camparmo,camPosition);
+  window.showWidget("newimage",camparmn,camPosition_2);
+  window.spin();
+
 
 }
 
@@ -195,8 +218,6 @@ int main() {
   Mat frame;
   VideoCapture capture;
   //capture.open("http://admin:123456@192.168.1.105:8081");
-
-    MatrixXd ei_R(3,3);
     Mat K = (Mat_<double>(3, 3) << 477.7987, 0, 323.1992, 0, 477.4408, 240.1797, 0, 0, 1);
     Mat image_address_new = imread( "/home/hu/下载/IMG20230328182935.jpg");
     Mat image_address_old = imread( "/home/hu/下载/IMG20230328182918.jpg");
@@ -208,18 +229,16 @@ int main() {
     cout << "R 为" << endl;
     cout << Pose[0] << endl;
     cout <<"T 为" << Pose[1]<<endl;
-    ei_R<< Pose[0].at<double>(0, 0), Pose[0].at<double>(0, 1), Pose[0].at<double>(0, 2),
-        Pose[0].at<double>(1, 0), Pose[0].at<double>(1, 1), Pose[0].at<double>(1, 2),
-        Pose[0].at<double>(2, 0), Pose[0].at<double>(2, 1), Pose[0].at<double>(2, 2);
   transfrom.block<3, 3>(0, 0)<< Pose[0].at<double>(0, 0), Pose[0].at<double>(0, 1), Pose[0].at<double>(0, 2),
       Pose[0].at<double>(1, 0), Pose[0].at<double>(1, 1), Pose[0].at<double>(1, 2),
       Pose[0].at<double>(2, 0), Pose[0].at<double>(2, 1), Pose[0].at<double>(2, 2);
   transfrom.col(3) << Pose[1].at<double>(0, 0), Pose[1].at<double>(1, 0), Pose[1].at<double>(2, 0), 1;
     cout << test * transfrom << endl;
     result = transfrom * test;
-    drawing(result, nimage);
+   // drawing(result, nimage);
     cout << result << endl;
     //epipolarConstraintCheck(K,mPoint[0],mPoint[1],Pose[0],Pose[1]);  // 验证对极约束
-  drawing_rot(ei_R);
+    drawing_rot(Pose,oimage,nimage);
+
     waitKey(1);
   }

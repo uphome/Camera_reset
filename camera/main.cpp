@@ -1,3 +1,5 @@
+#define CVUI_IMPLEMENTATION
+#include "/home/hu/Libraries/cvui-2.7.0/cvui.h"
 #include <iostream>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
@@ -15,6 +17,11 @@
 using namespace ::std;
 using namespace ::cv;
 using namespace ::Eigen;
+
+
+
+#define WINDOW_NAME "最终结果"
+
 //TODO：完成旋转角度的可视化。  采用欧拉角
 //TODO: 完善计算R，T的方法。
 struct key_img
@@ -148,6 +155,7 @@ void drawing(MatrixXf result,struct key_img img)
   MatrixXf test(4,4);
   test << 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1;
   Mat resut;
+
   namedWindow("最终结果",WINDOW_NORMAL);
 resizeWindow("最终结果",500,500);
   line(img.image,Point(result(0,0)*100+img.image.cols/2,result(1,0)*100+img.image.rows/2),Point(result(0,1)*100+img.image.cols/2,result(1,1)*100+img.image.rows/2),Scalar(0, 255, 0),10);

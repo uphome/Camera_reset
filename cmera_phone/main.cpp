@@ -35,7 +35,7 @@ void intercept(VideoCapture capture)
   while (1)
   {
     capture>>img;
-    //img.resize(3468,3468);
+   // img.resize(3468,3468);
     img.resize(480,640);
     namedWindow("choose",WINDOW_NORMAL);
     resizeWindow("choose",500,500);
@@ -46,6 +46,7 @@ void intercept(VideoCapture capture)
       filename="/home/hu/CLionProjects/cmera_phone/img_phone/img_phone.jpg";
       imwrite(filename, img);
       cout<<"保存图片 位于"<<filename<<endl;
+      destroyAllWindows();
       break;
     }
 
@@ -56,13 +57,12 @@ void feature_points(Mat met,struct key_img &fe_point,string tag)
 {
   fe_point.image= met;
   Mat image_key;
+  Mat imamg_result;
   Mat dest;
   Ptr<ORB> orb = ORB::create();
   vector<KeyPoint> key_point;
   orb->detectAndCompute(fe_point.image, Mat(), fe_point.key_point, fe_point.dest);
-  drawKeypoints(fe_point.image, fe_point.key_point, fe_point.image_key, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
-
-
+  drawKeypoints(fe_point.image, fe_point.key_point, imamg_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
 
   /*namedWindow("features_window"+tag, CV_WINDOW_NORMAL);
   resizeWindow("features_window"+tag,500,500);
@@ -78,7 +78,6 @@ vector<vector<cv::Point2f>> matching(struct key_img new_image, struct key_img ol
   BFMatcher bf_matcher(NORM_HAMMING);
   bf_matcher.match(new_image.dest,old_image.dest,matches);
 
-  // 匹配对筛选
   double min_dist = 1000, max_dist = 0;
   // 找出所有匹配之间的最大值和最小值
   for (int i = 0; i < new_image.dest.rows; i++)
@@ -87,47 +86,15 @@ vector<vector<cv::Point2f>> matching(struct key_img new_image, struct key_img ol
     if (dist < min_dist) min_dist = dist;
     if (dist > max_dist) max_dist = dist;
   }
-  // 当描述子之间的匹配大于2倍的最小距离时，即认为该匹配是一个错误的匹配。
-  // 但有时描述子之间的最小距离非常小，可以设置一个经验值作为下限
+
   vector<DMatch> good_matches;
   for (int i = 0; i < new_image.dest.rows; i++)
   {
-    if (matches[i].distance <= max(2 * min_dist, 30.0))
+    if (matches[i].distance <= max(2 * min_dist, 30.0)) // 可调整筛选条件
       good_matches.push_back(matches[i]);
   }
-
-
-
-
-
-
-
-
-/*
-  BFMatcher matcher;
-  vector<DMatch>matches;
-  vector<Mat>trian(1,old_image.dest);
-  matcher.add(trian);
-  matcher.train();
-
-  const float minRatio = 0.7;
-maPoint_old
-  vector<vector<DMatch>>matchpoints;
-  matcher.knnMatch(new_image.dest,matchpoints,2);
-  vector<DMatch>goodfeatur;
-
-  for (int i =0;i<matchpoints.size();i++)
-  {
-    if (matchpoints[i][0].distance/matchpoints[i][1].distance<=minRatio)
-    {
-      goodfeatur.push_back(matchpoints[i][0]);
-    }
-
-  }
-  cout<<"匹配特征点的筛选比值为"<<minRatio<<endl;
-*/
   cout<<"筛选好之后的匹配特征点数目为"<<good_matches.size()<<endl;
-  assert(("筛选好之后的匹配特征点数目小于8对",good_matches.size()>=0));
+  assert(("筛选好之后的匹配特征点数目小于8对",good_matches.size()>=8));
 
   for(int i =0;i<good_matches.size();i++)
   {
@@ -138,41 +105,110 @@ maPoint_old
   maPoint.push_back(maPoint_new);
   maPoint.push_back(maPoint_old);
   Mat result_img;
+  Mat result_new;
+  Mat result_old;
   drawMatches(new_image.image,new_image.key_point,old_image.image,old_image.key_point, good_matches,result_img);
-  drawKeypoints(old_image.image,old_image.key_point,old_image.image);
-  drawKeypoints(new_image.image,new_image.key_point,new_image.image);
+  drawKeypoints(old_image.image,old_image.key_point,result_old);
+  drawKeypoints(new_image.image,new_image.key_point,result_new);
 
 
-  namedWindow("匹配结果",WINDOW_NORMAL);
+/*  namedWindow("匹配结果",WINDOW_NORMAL);
   resizeWindow("匹配结果",1000,500);
   cv::imshow("匹配结果",result_img);
-  waitKey(1);
+  waitKey(1);*/
+
   return maPoint;
 }
 
+vector<Mat> calmatrix(vector<vector<cv::Point2f>> mpoint)
+{ Mat R,t;
+  Point2f pricipal(323.1992,240.1797);
+  float focal=477.7987;
+  Mat ess_matrix;
+  ess_matrix =findEssentialMat(mpoint[0],mpoint[1],focal,pricipal);
+  recoverPose(ess_matrix,mpoint[0],mpoint[1],R,t,focal,pricipal);
+  vector<Mat>Pose;
+  Pose.push_back(R);
+  Pose.push_back(t);
+  cout<<R<<endl;
+  return Pose;
+
+}
+
+void drawing_rot(vector<Mat>Pose,struct key_img oimg,struct key_img nimg,viz::Viz3d window)
+{
+  Vector3d euler;
+  //euler=Pose[1].eulerAngles(2,1,0);  // ZYX顺序，即先绕x轴roll,再绕y轴pitch,最后绕z轴yaw,0表示X轴,1表示Y轴,2表示Z轴
+
+  Matx33f K(477.7987, 0, 323.1992, 0, 477.4408, 240.1797, 0, 0, 1); // 内参矩阵
+  viz::Camera mainCamera(K,Size(640,480)); //初始化
+
+  viz::WCameraPosition camparmo(mainCamera.getFov(),oimg.image,1.0,viz::Color::white()); // 参数设置
+  cv::Affine3f camPosition(Mat::eye(3,3,CV_32F),Vec3f(0,0,0));
+ // cv::Affine3f camPosition(Matx33f (1,0,0,0,1,0,0,0,1),Vec3f(0,0,0));
+
+
+
+
+  viz::WCameraPosition camparmn(mainCamera.getFov(),nimg.image,1.0,viz::Color::green());
+  cv::Affine3d camPosition_2(Pose[0],Pose[1]);
+  window.showWidget("oldimage",camparmo,camPosition);
+  window.showWidget("newimage",camparmn,camPosition_2);
+
+
+
+}
+
+void  watermark(Mat src1,Mat src2)
+{
+  double alpha = 0.3;
+  double beta = 1 - alpha;
+  double gamma = 0;
+  Mat dst;
+
+  addWeighted(src1, alpha, src2, beta, gamma, dst, -1);
+  namedWindow("匹配结果",WINDOW_NORMAL);
+  resizeWindow("匹配结果",500,500);
+  cv::imshow("匹配结果",dst);
+  waitKey(1);
+
+}
+
+
 int main() {
+  viz::Viz3d window("camere pose");
   key_img sou_image, tar_image;
   vector<vector<Point2f>> mPoint;
+  vector<Mat> Pose;
 
-
+ // 引入摄像头
   Mat frame;
   VideoCapture capture;
   capture.open("http://admin:123456@192.168.73.14:8081");
   Mat capture_img;
   Mat tar_img;
-  tar_img=imread("/home/hu/CLionProjects/cmera_phone/img_phone/img_phone.jpg");
 
   //截图
   intercept(capture);
-
+  tar_img=imread("/home/hu/CLionProjects/cmera_phone/img_phone/img_phone.jpg");
   //开始处理图片
   while (1)
   {
     capture>>capture_img;
+
     feature_points(capture_img,sou_image,"sou");
     feature_points(tar_img,tar_image,"tar");
 
     mPoint = matching(sou_image, tar_image);
+
+    Pose = calmatrix(mPoint);
+
+    drawing_rot(Pose,tar_image,sou_image,window);
+
+    //watermark(capture_img,tar_img);
+    window.spinOnce();
+
+
 
   }
 

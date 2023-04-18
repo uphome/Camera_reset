@@ -207,11 +207,12 @@ int CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKey
 
     //参考帧上的重投影误差，这个的确就是按照定义来的
     float squareError1 = (im1x-kp1.pt.x)*(im1x-kp1.pt.x)+(im1y-kp1.pt.y)*(im1y-kp1.pt.y);
+
     // 重投影误差太大，跳过淘汰
-    if(squareError1>th2)
-      cout<<"大于阈值被淘汰的重投影误差为"<<squareError1<<endl;
-    continue;
-    cout<<"符合条件的重投影误差为"<<squareError1<<endl;
+    if(squareError1>th2*2)
+    {
+    continue;}
+
     // Check reprojection error in second image
     // 计算3D点在第二个图像上的投影误差，计算过程和第一个图像类似
     float im2x, im2y;
@@ -224,8 +225,9 @@ int CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKey
     float squareError2 = (im2x-kp2.pt.x)*(im2x-kp2.pt.x)+(im2y-kp2.pt.y)*(im2y-kp2.pt.y);
 
     // 重投影误差太大，跳过淘汰
-    if(squareError2>th2)
-      continue;
+    if(squareError2>th2*2){
+      continue;}
+    //cout<<"目前误差数值为："<<squareError2<<endl;
 
     // Step 6 统计经过检验的3D点个数，记录3D点视差角
     // 如果运行到这里就说明当前遍历的这个特征点对靠谱，经过了重重检验，说明是一个合格的点，称之为good点
@@ -259,7 +261,9 @@ int CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKey
     //如果没有good点那么这个就直接设置为0了
     parallax=0;
   //返回good点计数
+ // cout<<"nGooD:  "<<nGood<<endl;
   return nGood;
+
 }
 
 void DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t)
@@ -295,7 +299,7 @@ void DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t)
     R2=-R2;
 }
 
-void ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::Mat &K,
+bool ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::Mat &K,
                   cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated,key_img &nimage,key_img &oimage,vector<DMatch>gooodfeaturs)
 {
 
@@ -356,10 +360,8 @@ void ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::Mat &K,
   float d3 = w.at<float>(2);
 
 // SVD分解正常情况下特征值di应该是正的，且满足d1>=d2>=d3
-  if(d1/d2<1.00001 || d2/d3<1.00001) {
-//return false;
-  }
-
+  if(d1/d2<1.00001 || d2/d3<1.00001)
+    return false;
 
 // 在ORBSLAM中没有对奇异值 d1 d2 d3按照论文中描述的关系进行分类讨论, 而是直接进行了计算
 // 定义8中情况下的旋转矩阵、平移向量和空间向量
@@ -541,7 +543,7 @@ void ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::Mat &K,
 
 // 调用 Initializer::CheckRT(), 计算good点的数目
     int nGood = CheckRT(vR[i],vt[i],                    //当前组解的旋转矩阵和平移向量
-                        oimage.key_point,nimage.key_point,                //特征点
+                        nimage.key_point,oimage.key_point,                //特征点
                         gooodfeaturs,vbMatchesInliers,   //特征匹配关系以及Inlier标记
                         K,                              //相机的内参数矩阵
                         vP3Di,                          //存储三角化测量之后的特征点空间坐标的
@@ -579,26 +581,26 @@ void ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::Mat &K,
 // 2. 视角差大于规定的阈值
 // 3. good点数要大于规定的最小的被三角化的点数量
 // 4. good数要足够多，达到总数的90%以上
-  if(secondBestGood<0.75*bestGood &&
-      bestParallax>=minParallax &&
-      bestGood>minTriangulated &&
-      bestGood>0.9*N)
-  {
-// 从最佳的解的索引访问到R，t
+//cout<<"bestGood 为"<<bestGood<<endl;
+//  if(secondBestGood<0.75*bestGood &&
+//      bestParallax>=minParallax &&
+//      bestGood>minTriangulated &&
+//      bestGood>0.9*N)
+//  {
+//   // cout<<"找到了最好的解"<<endl;
+//// 从最佳的解的索引访问到R，t
     vR[bestSolutionIdx].copyTo(R21);
     vt[bestSolutionIdx].copyTo(t21);
-// 获得最佳解时，成功三角化的三维点，以后作为初始地图点使用
-    vP3D = bestP3D;
-// 获取特征点的被成功进行三角化的标记
-    vbTriangulated = bestTriangulated;
+//// 获得最佳解时，成功三角化的三维点，以后作为初始地图点使用
+   vP3D = bestP3D;
+//// 获取特征点的被成功进行三角化的标记
+   vbTriangulated = bestTriangulated;
 
-//返回真，找到了最好的解
-
-  }
+//  }
 
 }
 void ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv::Mat &K,
-                  cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated,key_img &oimg,key_img &nimg,vector<DMatch>goodfeatures)
+                  cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated,key_img &nimg,key_img &oimg,vector<DMatch>goodfeatures)
 {
 // Step 1 统计有效匹配点个数，并用 N 表示
 // vbMatchesInliers 中存储匹配点对是否是有效
@@ -643,16 +645,16 @@ void ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv::Mat &K,
 
 // Step 4.1 使用同样的匹配点分别检查四组解，记录当前计算的3D点在摄像头前方且投影误差小于阈值的个数，记为有效3D点个数
   int nGood1 = CheckRT(R1,t1,							//当前组解
-                       oimg.key_point,nimg.key_point,				//参考帧和当前帧中的特征点
+                       nimg.key_point,oimg.key_point,				//参考帧和当前帧中的特征点
                        goodfeatures, vbMatchesInliers,	//特征点的匹配关系和Inliers标记
                        K, 							//相机的内参数矩阵
                        vP3D1,							//存储三角化以后特征点的空间坐标
                        4.0*mSigma2,					//三角化测量过程中允许的最大重投影误差
                        vbTriangulated1,				//参考帧中被成功进行三角化测量的特征点的标记
                        parallax1);					//认为某对特征点三角化测量有效的比较大的视差角
-  int nGood2 = CheckRT(R2,t1,oimg.key_point,nimg.key_point,goodfeatures,vbMatchesInliers,K, vP3D2, 4.0*mSigma2, vbTriangulated2, parallax2);
-  int nGood3 = CheckRT(R1,t2,oimg.key_point,nimg.key_point,goodfeatures,vbMatchesInliers,K, vP3D3, 4.0*mSigma2, vbTriangulated3, parallax3);
-  int nGood4 = CheckRT(R2,t2,oimg.key_point,nimg.key_point,goodfeatures,vbMatchesInliers,K, vP3D4, 4.0*mSigma2, vbTriangulated4, parallax4);
+  int nGood2 = CheckRT(R2,t1,nimg.key_point,oimg.key_point,goodfeatures,vbMatchesInliers,K, vP3D2, 4.0*mSigma2, vbTriangulated2, parallax2);
+  int nGood3 = CheckRT(R1,t2,nimg.key_point,oimg.key_point,goodfeatures,vbMatchesInliers,K, vP3D3, 4.0*mSigma2, vbTriangulated3, parallax3);
+  int nGood4 = CheckRT(R2,t2,nimg.key_point,oimg.key_point,goodfeatures,vbMatchesInliers,K, vP3D4, 4.0*mSigma2, vbTriangulated4, parallax4);
 
 // Step 4.2 选取最大可三角化测量的点的数目
   int maxGood = max(nGood1,max(nGood2,max(nGood3,nGood4)));
@@ -682,10 +684,10 @@ void ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv::Mat &K,
 // Step 4.4 四个结果中如果没有明显的最优结果，或者没有足够数量的三角化点，则返回失败
 // 条件1: 如果四组解能够重建的最多3D点个数小于所要求的最少3D点个数（mMinGood），失败
 // 条件2: 如果存在两组及以上的解能三角化出 >0.7*maxGood的点，说明没有明显最优结果，失败
-  if(maxGood<nMinGood || nsimilar>1)
-  {
-
-  }
+//  if(maxGood<nMinGood || nsimilar>1)
+//    {
+//
+//    }
 
 
 //  Step 4.5 选择最佳解记录结果
@@ -841,8 +843,8 @@ float CheckHomography(
     bool bIn = true;
 
     // Step 2.1 提取参考帧和当前帧之间的特征匹配点对
-    const cv::KeyPoint &kp1 = old_img.key_point[mvMatches12[i].queryIdx];
-    const cv::KeyPoint &kp2 = new_img.key_point[mvMatches12[i].trainIdx];
+    const cv::KeyPoint &kp1 = new_img.key_point[mvMatches12[i].queryIdx];
+    const cv::KeyPoint &kp2 = old_img.key_point[mvMatches12[i].trainIdx];
     const float u1 = kp1.pt.x;
     const float v1 = kp1.pt.y;
     const float u2 = kp2.pt.x;
@@ -988,8 +990,8 @@ float CheckFundamental(
     bool bIn = true;
 
     // Step 2.1 提取参考帧和当前帧之间的特征匹配点对
-    const cv::KeyPoint &kp1 = old_img.key_point[mvMatches12[i].queryIdx];
-    const cv::KeyPoint &kp2 = new_img.key_point[mvMatches12[i].trainIdx];
+    const cv::KeyPoint &kp1 = new_img.key_point[mvMatches12[i].queryIdx];
+    const cv::KeyPoint &kp2 = old_img.key_point[mvMatches12[i].trainIdx];
 
     // 提取出特征点的坐标
     const float u1 = kp1.pt.x;
@@ -1235,8 +1237,8 @@ void Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2f> &vNormaliz
   T.at<float>(0, 2) = -meanX * sX;
   T.at<float>(1, 2) = -meanY * sY;
 }
-void FindFundamental(vector<bool> &vbMatchesInliers, float &score, cv::Mat &F21,vector<DMatch>&mvMatches12,key_img new_img,key_img old_img,vector<vector<size_t>> &mvSets)
-{
+void FindFundamental(vector<bool> &vbMatchesInliers, float &score, cv::Mat &F21,vector<DMatch>&mvMatches12,
+                     key_img new_img,key_img old_img,vector<vector<size_t>> &mvSets) {
 // 计算基础矩阵,其过程和上面的计算单应矩阵的过程十分相似.
 
 // Number of putative matches
@@ -1251,8 +1253,8 @@ void FindFundamental(vector<bool> &vbMatchesInliers, float &score, cv::Mat &F21,
 
   vector<cv::Point2f> vPn1, vPn2;
   cv::Mat T1, T2;
-  Normalize(old_img.key_point,vPn1, T1);
-  Normalize(new_img.key_point,vPn2, T2);
+  Normalize(new_img.key_point,vPn1, T1);
+  Normalize(old_img.key_point,vPn2, T2);
 // ! 注意这里取的是归一化矩阵T2的转置,因为基础矩阵的定义和单应矩阵不同，两者去归一化的计算也不相同
   cv::Mat T2t = T2.t();
 
@@ -1330,8 +1332,8 @@ void FindHomography(vector<bool> &vbMatchesInliers, float &score, cv::Mat &H21,v
   vector<cv::Point2f> vPn1, vPn2;
 // 记录各自的归一化矩阵
   cv::Mat T1, T2;
-  Normalize(old_img.key_point,vPn1, T1);
-  Normalize(new_img.key_point,vPn2, T2);
+  Normalize(new_img.key_point,vPn1, T1);
+  Normalize(old_img.key_point,vPn2, T2);
 
 //这里求的逆在后面的代码中要用到，辅助进行原始尺度的恢复
   cv::Mat T2inv = T2.inv();
@@ -1399,7 +1401,6 @@ void FindHomography(vector<bool> &vbMatchesInliers, float &score, cv::Mat &H21,v
 // Step 5 更新具有最优评分的单应矩阵计算结果,并且保存所对应的特征点对的内点标记
     if(currentScore>score)
     {
-      cout<<currentScore<<endl;
 //如果当前的结果得分更高，那么就更新最优计算结果
       H21 = H21i.clone();
 //保存匹配好的特征点对的Inliers标记
@@ -1495,10 +1496,10 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   drawKeypoints(new_image.image,new_image.key_point,result_new);
 
 
-/*  namedWindow("匹配结果",WINDOW_NORMAL);
+  namedWindow("匹配结果",WINDOW_NORMAL);
   resizeWindow("匹配结果",1000,500);
   cv::imshow("匹配结果",result_img);
-  waitKey(1);*/
+  waitKey(1);
 
   return good_matches;
 }
@@ -1518,7 +1519,7 @@ vector<Mat> calmatrix(vector<vector<cv::Point2f>> mpoint)
 
 }
 
-void drawing_rot(vector<Mat>Pose,struct key_img oimg,struct key_img nimg,viz::Viz3d window)
+void drawing_rot(Mat &R,Mat &t,struct key_img oimg,struct key_img nimg,viz::Viz3d window)
 {
   Vector3d euler;
   //euler=Pose[1].eulerAngles(2,1,0);  // ZYX顺序，即先绕x轴roll,再绕y轴pitch,最后绕z轴yaw,0表示X轴,1表示Y轴,2表示Z轴
@@ -1534,7 +1535,7 @@ void drawing_rot(vector<Mat>Pose,struct key_img oimg,struct key_img nimg,viz::Vi
 
 
   viz::WCameraPosition camparmn(mainCamera.getFov(),nimg.image,1.0,viz::Color::green());
-  cv::Affine3d camPosition_2(Pose[0],Pose[1]);
+  cv::Affine3f camPosition_2(R,t);
   window.showWidget("oldimage",camparmo,camPosition);
   window.showWidget("newimage",camparmn,camPosition_2);
 
@@ -1566,13 +1567,13 @@ int main() {
  // 引入摄像头
   Mat frame;
   VideoCapture capture;
-  capture.open("http://admin:123456@192.168.1.101:8081");
+  capture.open("http://admin:123456@192.168.29.213:8081");
   Mat capture_img;
   Mat tar_img;
 
   //截图
   intercept(capture);
-  tar_img=imread("/home/hu/CLionProjects/cmera_phone/img_phone/img_phone.jpg");
+  tar_img=imread("/home/hu/CLionProjects/cmera_phone/img_phone/img_phone.jpg"); //参考帧
   //开始处理图片
   while (1)
   {
@@ -1591,8 +1592,7 @@ int main() {
     vector<size_t> vAvailableIndices;//在RANSAC的某次迭代中，还可以被抽取来作为数据样本的特征点对的索引
 
     //初始化所有特征点对的索引，索引值0到N-1
-    for(int i=0; i<N; i++)
-    {
+    for(int i=0; i<N; i++) {
       vAllIndices.push_back(i);
     }
     //cout << '-----'<< endl;
@@ -1600,15 +1600,12 @@ int main() {
     default_random_engine   e;//随机数引擎对象
     e.seed(time(NULL)); //初始化种子
 
-    for(int it=0; it<mMaxIterations; it++)
-    {
-
+    for(int it=0; it<mMaxIterations; it++) {
       vAvailableIndices = vAllIndices;
 
       // Select a minimum set
       //选择最小的数据样本集，使用八点法求，所以这里就循环了八次
-      for(size_t j=0; j<8; j++)
-      {
+      for(size_t j=0; j<8; j++) {
         // 随机产生一对点的id,范围从0到N-1
         uniform_int_distribution<unsigned>  u(0,vAvailableIndices.size()-1);
         int randi = u(e);
@@ -1617,7 +1614,6 @@ int main() {
 
         //将本次迭代这个选中的第j个特征点对的索引添加到mvSets中
         mvSets[it][j] = idx;
-
 
         vAvailableIndices[randi] = vAvailableIndices.back();
         vAvailableIndices.pop_back();  //删除尾部数据
@@ -1628,11 +1624,8 @@ int main() {
     float SH, SF; //score for H and F
     cv::Mat H, F;
 
-    FindFundamental(vbMatchesInliersF,SF,F,goodfeatur,tar_image,sou_image,mvSets);
-    FindHomography(vbMatchesInliersH,SH,H,goodfeatur,tar_image,sou_image,mvSets);
-    cout<<"SF为："<<SF<<endl;
-    cout<<"F为："<<F<<endl;
-    cout<<"SH为："<<SH<<endl;
+    FindFundamental(vbMatchesInliersF,SF,F,goodfeatur,sou_image,tar_image,mvSets);
+    FindHomography(vbMatchesInliersH,SH,H,goodfeatur,sou_image,tar_image,mvSets);
     float RH = SH/(SH+SF);
     cout<<RH<<endl;
     Mat R21,t21;
@@ -1642,30 +1635,41 @@ int main() {
     K.convertTo(K,CV_32F);
     F.convertTo(F,CV_32F);
     H.convertTo(H,CV_32F);
-    if(RH>0.40)
-    {cout<<"使用H恢复运动"<<endl;
-      ReconstructH(vbMatchesInliersH,H,K,R21,t21,vP3D,vbTriangulated,1.0,50,sou_image,tar_image,goodfeatur);
-    } else{
+
+/*
+    if(RH>0.4)
+    {
+
+      ReconstructH(vbMatchesInliersH, H, K, R21, t21, vP3D, vbTriangulated, 0.5, 50, sou_image, tar_image, goodfeatur);
+    } else
+    {
+      ReconstructF(vbMatchesInliersF,F,K,R21,t21,vP3D,vbTriangulated,0.5,50,sou_image,tar_image,goodfeatur);
+
+    }*/
+
+    if(RH>0.4) {
+      cout<<"使用H恢复运动"<<endl;
+      ReconstructH(vbMatchesInliersH,H,K,R21,t21,vP3D,vbTriangulated,0.5,50,sou_image,tar_image,goodfeatur);
+
+
+    } else
+    {
       cout<<"使用F恢复运动"<<endl;
-      ReconstructF(vbMatchesInliersF,F,K,R21,t21,vP3D,vbTriangulated,1.0,50,sou_image,tar_image,goodfeatur);
+      ReconstructF(vbMatchesInliersF,F,K,R21,t21,vP3D,vbTriangulated,0.5,50,sou_image,tar_image,goodfeatur);
+
     }
 
 
-    cout<<R21<<endl;
-    cout<<t21<<endl;
 
+    R21.convertTo(R21,CV_32F);
+    t21.convertTo(t21,CV_32F);
+    drawing_rot(R21,t21,tar_image,sou_image,window);
 
-
-/*
-    Pose = calmatrix(mPoint);
-
-    drawing_rot(Pose,tar_image,sou_image,window);
 
     //watermark(capture_img,tar_img);
     window.spinOnce();
 
 
-*/
 
   }
 

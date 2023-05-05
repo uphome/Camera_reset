@@ -13,7 +13,7 @@ using namespace cv;
 class Compute_RT {
 
  public:
-  void set_number(Mat &K,vector<DMatch>&goodfeatuer,vector<KeyPoint> &rekeypoints,vector<KeyPoint> &cukeypoints);
+  void set_number(float &mSigma,int &mMaxIterations,Mat &K,vector<DMatch>&goodfeatuer,vector<KeyPoint> &rekeypoints,vector<KeyPoint> &cukeypoints);
   bool Initialize( cv::Mat &R21, cv::Mat &t21,
                                vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated);
 
@@ -231,7 +231,8 @@ cv::Mat mK;
 
 // Standard Deviation and Variance
 /** 测量误差 */
-float mSigma, mSigma2;
+float mSigma;
+float mSigma2;
 
 // Ransac max iterations
 /** 算Fundamental和Homography矩阵时RANSAC迭代次数  */

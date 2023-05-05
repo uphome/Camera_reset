@@ -196,6 +196,9 @@ int main() {
 
 
   Compute_RT camera;
+  float msigm=1;
+  int mMaxIterations=200;
+  K.convertTo(K,CV_32F);
 
 
   //开始处理图片
@@ -209,16 +212,18 @@ int main() {
     feature_points(tar_img,tar_image,"tar");
     good_matches = matching(sou_image, tar_image);
 
-    camera.set_number(K,good_matches,sou_image.key_point,tar_image.key_point);
+    camera.set_number(msigm,mMaxIterations,K,good_matches,sou_image.key_point,tar_image.key_point);
     Mat R,T;
     vector<cv::Point3f> vP3D;
     vector<bool> vbTriangulated;
-    //bool Hu;
+    bool Hu;
 
-     camera.Initialize(R,T,vP3D,vbTriangulated);
-    cout<<"运行------";
-
-
+    Hu=camera.Initialize(R,T,vP3D,vbTriangulated);
+    cout<<Hu<<endl;
+    if(Hu)
+    {
+      cout<<R<<endl;
+    }
 
     //watermark(capture_img,tar_img);
     //window.spinOnce();

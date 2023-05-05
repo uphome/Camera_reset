@@ -9,14 +9,21 @@
 #include <random>
 using namespace std;
 
-
-void Compute_RT::set_number(Mat &K,vector<DMatch>&goodfeatuer,vector<KeyPoint> &rekeypoints,vector<KeyPoint> &cukeypoints)
-{
-  mK=K;
-  mvMatches12=goodfeatuer;
-  mvKeys1=rekeypoints;
-  mvKeys2=cukeypoints;
+void Compute_RT::set_number(float &msigma,
+                            int &maxIterations,
+                            Mat &K,
+                            vector<DMatch> &goodfeatuer,
+                            vector<KeyPoint> &rekeypoints,
+                            vector<KeyPoint> &cukeypoints) {
+  mK=K; ///相机内参矩阵
+  mvMatches12=goodfeatuer; ///匹配好的特征代点对
+  mvKeys1=rekeypoints;  ///参考帧的特征点
+  mvKeys2=cukeypoints;  ///当前帧的特征点
+  mSigma=msigma; ///投影误差
+  mMaxIterations=maxIterations; ///RANSAC迭代次数
 }
+
+
 
 bool Compute_RT::Initialize( cv::Mat &R21, cv::Mat &t21,
                              vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated)
@@ -89,6 +96,9 @@ bool Compute_RT::Initialize( cv::Mat &R21, cv::Mat &t21,
 
   // 构造线程来计算H矩阵及其得分
   // thread方法比较特殊，在传递引用的时候，外层需要用ref来进行引用传递，否则就是浅拷贝
+  H.convertTo(H,CV_32F);
+  F.convertTo(F,CV_32F);
+
   FindHomography(vbMatchesInliersH,SH,H);
 						//输出，计算的单应矩阵结果
   // 计算fundamental matrix并打分，参数定义和H是一样的，这里不再赘述

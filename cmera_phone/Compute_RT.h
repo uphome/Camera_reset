@@ -5,19 +5,20 @@
 #ifndef CMERA_PHONE__COMPUTE_RT_H_
 #define CMERA_PHONE__COMPUTE_RT_H_
 #include <opencv2/core/types.hpp>
-class Compute_RT {
-  Initializer(const Frame &ReferenceFrame,
-              float sigma = 1.0,
-              int iterations = 200);
-};
+#include <opencv2/core/mat.hpp>
 
-bool Initialize(const Frame &CurrentFrame,
-                const vector<int> &vMatches12,
-                cv::Mat &R21, cv::Mat &t21,
-                vector<cv::Point3f> &vP3D,
-                vector<bool> &vbTriangulated);
-private:
-/**
+using namespace std;
+using namespace cv;
+
+class Compute_RT {
+
+ public:
+  void set_number(Mat &K,vector<DMatch>&goodfeatuer,vector<KeyPoint> &rekeypoints,vector<KeyPoint> &cukeypoints);
+  bool Initialize( cv::Mat &R21, cv::Mat &t21,
+                               vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated);
+
+
+  /**
  * @brief 计算单应矩阵，假设场景为平面情况下通过前两帧求取Homography矩阵，并得到该模型的评分
  * 原理参考Multiple view geometry in computer vision  P109 算法4.4
  * Step 1 将当前帧和参考帧中的特征点坐标进行归一化
@@ -193,7 +194,7 @@ void Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2f> &vNormaliz
  * @return	int 返回本组解中good点的数目
  */
 int CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
-            const vector<Match> &vMatches12, vector<bool> &vbInliers,
+            const vector<DMatch> &vMatches12, vector<bool> &vbInliers,
             const cv::Mat &K, vector<cv::Point3f> &vP3D, float th2, vector<bool> &vbGood, float &parallax);
 
 /**
@@ -220,7 +221,7 @@ vector<cv::KeyPoint> mvKeys2;
 // Current Matches from Reference to Current
 // Reference Frame: 1, Current Frame: 2
 /** Match的数据结构是pair,mvMatches12只记录Reference到Current匹配上的特征点对  */
-vector<Match> mvMatches12;
+vector<DMatch> mvMatches12;
 /** 记录Reference Frame的每个特征点在Current Frame是否有匹配的特征点 */
 vector<bool> mvbMatched1;
 

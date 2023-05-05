@@ -5,65 +5,23 @@
 #include "Compute_RT.h"
 #include <opencv2/features2d.hpp>
 #include <vector>
-#include <cassert>
-#include <opencv2/calib3d.hpp>
-
+#include<thread>
+#include <random>
 using namespace std;
-Compute_RT::InInitializer(const Frame &ReferenceFrame, float sigma, int iterations)
+
+
+void Compute_RT::set_number(Mat &K,vector<DMatch>&goodfeatuer,vector<KeyPoint> &rekeypoints,vector<KeyPoint> &cukeypoints)
 {
-  //从参考帧中获取相机的内参数矩阵
-  mK = ReferenceFrame.mK.clone();
-
-  // 从参考帧中获取去畸变后的特征点
-  mvKeys1 = ReferenceFrame.mvKeysUn;
-
-  //获取估计误差
-  mSigma = sigma;
-  mSigma2 = sigma*sigma;
-
-  //最大迭代次数
-  mMaxIterations = iterations;
+  mK=K;
+  mvMatches12=goodfeatuer;
+  mvKeys1=rekeypoints;
+  mvKeys2=cukeypoints;
 }
 
-
-bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatches12, cv::Mat &R21, cv::Mat &t21,
+bool Compute_RT::Initialize( cv::Mat &R21, cv::Mat &t21,
                              vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated)
 {
-  // Fill structures with current keypoints and matches with reference frame
-  // Reference Frame: 1, Current Frame: 2
 
-  //获取当前帧的去畸变之后的特征点
-  mvKeys2 = CurrentFrame.mvKeysUn;
-
-  // mvMatches12记录匹配上的特征点对，记录的是帧2在帧1的匹配索引
-  mvMatches12.clear();
-  // 预分配空间，大小和关键点数目一致mvKeys2.size()
-  mvMatches12.reserve(mvKeys2.size());
-
-  // 记录参考帧1中的每个特征点是否有匹配的特征点
-  // 这个成员变量后面没有用到，后面只关心匹配上的特征点
-  mvbMatched1.resize(mvKeys1.size());
-
-  // Step 1 重新记录特征点对的匹配关系存储在mvMatches12，是否有匹配存储在mvbMatched1
-  // 将vMatches12（有冗余） 转化为 mvMatches12（只记录了匹配关系）
-  for(size_t i=0, iend=vMatches12.size();i<iend; i++)
-  {
-    //vMatches12[i]解释：i表示帧1中关键点的索引值，vMatches12[i]的值为帧2的关键点索引值
-    //没有匹配关系的话，vMatches12[i]值为 -1
-    if(vMatches12[i]>=0)
-    {
-      //mvMatches12 中只记录有匹配关系的特征点对的索引值
-      //i表示帧1中关键点的索引值，vMatches12[i]的值为帧2的关键点索引值
-      mvMatches12.push_back(make_pair(i,vMatches12[i]));
-      //标记参考帧1中的这个特征点有匹配关系
-      mvbMatched1[i]=true;
-    }
-    else
-      //标记参考帧1中的这个特征点没有匹配关系
-      mvbMatched1[i]=false;
-  }
-
-  // 有匹配的特征点的对数
   const int N = mvMatches12.size();
   // Indices for minimum set selection
   // 新建一个容器vAllIndices存储特征点索引，并预分配空间
@@ -72,6 +30,8 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
 
   //在RANSAC的某次迭代中，还可以被抽取来作为数据样本的特征点对的索引，所以这里起的名字叫做可用的索引
   vector<size_t> vAvailableIndices;
+  default_random_engine   e;//随机数引擎对象
+  e.seed(time(NULL)); //初始化种子
   //初始化所有特征点对的索引，索引值0到N-1
   for(int i=0; i<N; i++)
   {
@@ -86,7 +46,7 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
       vector<size_t>(8,0));	//这个则是第二维元素的初始值，也就是第一维。这里其实也是一个第一维的构造函数，第一维vector有8项，每项的初始值为0.
 
   //用于进行随机数据样本采样，设置随机数种子
-  DUtils::Random::SeedRandOnce(0);
+
 
   //开始每一次的迭代
   for(int it=0; it<mMaxIterations; it++)
@@ -99,7 +59,8 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
     for(size_t j=0; j<8; j++)
     {
       // 随机产生一对点的id,范围从0到N-1
-      int randi = DUtils::Random::RandomInt(0,vAvailableIndices.size()-1);
+      uniform_int_distribution<unsigned>  u(0,vAvailableIndices.size()-1);
+      int randi = u(e);
       // idx表示哪一个索引对应的特征点对被选中
       int idx = vAvailableIndices[randi];
 
@@ -128,17 +89,13 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
 
   // 构造线程来计算H矩阵及其得分
   // thread方法比较特殊，在传递引用的时候，外层需要用ref来进行引用传递，否则就是浅拷贝
-  thread threadH(&Initializer::FindHomography,	//该线程的主函数
-                 this,							//由于主函数为类的成员函数，所以第一个参数就应该是当前对象的this指针
-                 ref(vbMatchesInliersH), 			//输出，特征点对的Inlier标记
-                 ref(SH), 						//输出，计算的单应矩阵的RANSAC评分
-                 ref(H));							//输出，计算的单应矩阵结果
+  FindHomography(vbMatchesInliersH,SH,H);
+						//输出，计算的单应矩阵结果
   // 计算fundamental matrix并打分，参数定义和H是一样的，这里不再赘述
-  thread threadF(&Initializer::FindFundamental,this,ref(vbMatchesInliersF), ref(SF), ref(F));
+  FindFundamental(vbMatchesInliersF,SF,F);
+
   // Wait until both threads have finished
   //等待两个计算线程结束
-  threadH.join();
-  threadF.join();
 
   // Compute ratio of scores
   // Step 4 计算得分比例来判断选取哪个模型来求位姿R,t
@@ -180,7 +137,7 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
  * @param[in & out] score                     计算单应矩阵的得分
  * @param[in & out] H21                       单应矩阵结果
  */
-void Initializer::FindHomography(vector<bool> &vbMatchesInliers, float &score, cv::Mat &H21)
+void Compute_RT::FindHomography(vector<bool> &vbMatchesInliers, float &score, cv::Mat &H21)
 {
   // Number of putative matches
   //匹配的特征点对总数
@@ -234,8 +191,8 @@ void Initializer::FindHomography(vector<bool> &vbMatchesInliers, float &score, c
 
       // vPn1i和vPn2i为匹配的特征点对的归一化后的坐标
       // 首先根据这个特征点对的索引信息分别找到两个特征点在各自图像特征点向量中的索引，然后读取其归一化之后的特征点坐标
-      vPn1i[j] = vPn1[mvMatches12[idx].first];    //first存储在参考帧1中的特征点索引
-      vPn2i[j] = vPn2[mvMatches12[idx].second];   //second存储在参考帧1中的特征点索引
+      vPn1i[j] = vPn1[mvMatches12[idx].queryIdx];    //first存储在参考帧1中的特征点索引
+      vPn2i[j] = vPn2[mvMatches12[idx].trainIdx];   //second存储在参考帧1中的特征点索引
     }//读取8对特征点的归一化之后的坐标
 
     // Step 3 八点法计算单应矩阵
@@ -284,7 +241,7 @@ void Initializer::FindHomography(vector<bool> &vbMatchesInliers, float &score, c
  * @param[in & out] score                     计算基础矩阵得分
  * @param[in & out] F21                       从特征点1到2的基础矩阵
  */
-void Initializer::FindFundamental(vector<bool> &vbMatchesInliers, float &score, cv::Mat &F21)
+void Compute_RT::FindFundamental(vector<bool> &vbMatchesInliers, float &score, cv::Mat &F21)
 {
   // 计算基础矩阵,其过程和上面的计算单应矩阵的过程十分相似.
 
@@ -334,8 +291,8 @@ void Initializer::FindFundamental(vector<bool> &vbMatchesInliers, float &score, 
 
       // vPn1i和vPn2i为匹配的特征点对的归一化后的坐标
       // 首先根据这个特征点对的索引信息分别找到两个特征点在各自图像特征点向量中的索引，然后读取其归一化之后的特征点坐标
-      vPn1i[j] = vPn1[mvMatches12[idx].first];        //first存储在参考帧1中的特征点索引
-      vPn2i[j] = vPn2[mvMatches12[idx].second];       //second存储在参考帧1中的特征点索引
+      vPn1i[j] = vPn1[mvMatches12[idx].queryIdx];        //first存储在参考帧1中的特征点索引
+      vPn2i[j] = vPn2[mvMatches12[idx].trainIdx];       //second存储在参考帧1中的特征点索引
     }
 
     // Step 3 八点法计算基础矩阵
@@ -370,7 +327,7 @@ void Initializer::FindFundamental(vector<bool> &vbMatchesInliers, float &score, 
  * @param[in] vP2               当前帧中归一化后的特征点
  * @return cv::Mat              计算的单应矩阵H
  */
-cv::Mat Initializer::ComputeH21(
+cv::Mat Compute_RT::ComputeH21(
     const vector<cv::Point2f> &vP1, //归一化后的点, in reference frame
     const vector<cv::Point2f> &vP2) //归一化后的点, in current frame
 {
@@ -456,7 +413,7 @@ cv::Mat Initializer::ComputeH21(
  * @param[in] vP2           当前帧中归一化后的特征点
  * @return cv::Mat          最后计算得到的基础矩阵F
  */
-cv::Mat Initializer::ComputeF21(
+cv::Mat Compute_RT::ComputeF21(
     const vector<cv::Point2f> &vP1, //归一化后的点, in reference frame
     const vector<cv::Point2f> &vP2) //归一化后的点, in current frame
 {
@@ -519,7 +476,7 @@ cv::Mat Initializer::ComputeF21(
  * @param[in] sigma                     方差，默认为1
  * @return float                        返回得分
  */
-float Initializer::CheckHomography(
+float Compute_RT::CheckHomography(
     const cv::Mat &H21,                 //从参考帧到当前帧的单应矩阵
     const cv::Mat &H12,                 //从当前帧到参考帧的单应矩阵
     vector<bool> &vbMatchesInliers,     //匹配好的特征点对的Inliers标记
@@ -605,8 +562,8 @@ float Initializer::CheckHomography(
     bool bIn = true;
 
     // Step 2.1 提取参考帧和当前帧之间的特征匹配点对
-    const cv::KeyPoint &kp1 = mvKeys1[mvMatches12[i].first];
-    const cv::KeyPoint &kp2 = mvKeys2[mvMatches12[i].second];
+    const cv::KeyPoint &kp1 = mvKeys1[mvMatches12[i].queryIdx];
+    const cv::KeyPoint &kp2 = mvKeys2[mvMatches12[i].trainIdx];
     const float u1 = kp1.pt.x;
     const float v1 = kp1.pt.y;
     const float u2 = kp2.pt.x;
@@ -672,7 +629,7 @@ float Initializer::CheckHomography(
  * @param[in] sigma                     方差，默认为1
  * @return float                        返回得分
  */
-float Initializer::CheckFundamental(
+float Compute_RT::CheckFundamental(
     const cv::Mat &F21,             //当前帧和参考帧之间的基础矩阵
     vector<bool> &vbMatchesInliers, //匹配的特征点对属于inliers的标记
     float sigma)                    //方差
@@ -757,8 +714,8 @@ float Initializer::CheckFundamental(
     bool bIn = true;
 
     // Step 2.1 提取参考帧和当前帧之间的特征匹配点对
-    const cv::KeyPoint &kp1 = mvKeys1[mvMatches12[i].first];
-    const cv::KeyPoint &kp2 = mvKeys2[mvMatches12[i].second];
+    const cv::KeyPoint &kp1 = mvKeys1[mvMatches12[i].queryIdx];
+    const cv::KeyPoint &kp2 = mvKeys2[mvMatches12[i].trainIdx];
 
     // 提取出特征点的坐标
     const float u1 = kp1.pt.x;
@@ -830,7 +787,7 @@ float Initializer::CheckFundamental(
  * @return true                         成功初始化
  * @return false                        初始化失败
  */
-bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv::Mat &K,
+bool Compute_RT::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv::Mat &K,
                                cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated)
 {
   // Step 1 统计有效匹配点个数，并用 N 表示
@@ -998,7 +955,7 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
  * @return true                         单应矩阵成功计算出位姿和三维点
  * @return false                        初始化失败
  */
-bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::Mat &K,
+bool Compute_RT::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::Mat &K,
                                cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated)
 {
 
@@ -1309,7 +1266,7 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
  * @param[in] P2                投影矩阵P2
  * @param[in & out] x3D         计算的三维点
  */
-void Initializer::Triangulate(
+void Compute_RT::Triangulate(
     const cv::KeyPoint &kp1,    //特征点, in reference frame
     const cv::KeyPoint &kp2,    //特征点, in current frame
     const cv::Mat &P1,          //投影矩阵P1
@@ -1382,7 +1339,7 @@ void Initializer::Triangulate(
  * @param[in & out] vNormalizedPoints             特征点归一化后的坐标
  * @param[in & out] T                             归一化特征点的变换矩阵
  */
-void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2f> &vNormalizedPoints, cv::Mat &T)                           //将特征点归一化的矩阵
+void Compute_RT::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2f> &vNormalizedPoints, cv::Mat &T)                           //将特征点归一化的矩阵
 {
   // 归一化的是这些点在x方向和在y方向上的一阶绝对矩（随机变量的期望）。
 
@@ -1465,8 +1422,8 @@ void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2
  * @param[in & out] parallax                        计算出来的比较大的视差角（注意不是最大，具体看后面代码）
  * @return int
  */
-int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
-                         const vector<Match> &vMatches12, vector<bool> &vbMatchesInliers,
+int Compute_RT::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
+                         const vector<DMatch> &vMatches12, vector<bool> &vbMatchesInliers,
                          const cv::Mat &K, vector<cv::Point3f> &vP3D, float th2, vector<bool> &vbGood, float &parallax)
 {
   // 对给出的特征点对及其R t , 通过三角化检查解的有效性，也称为 cheirality check
@@ -1524,8 +1481,8 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
 
     // Step 2 获取特征点对，调用Triangulate() 函数进行三角化，得到三角化测量之后的3D点坐标
     // kp1和kp2是匹配好的有效特征点
-    const cv::KeyPoint &kp1 = vKeys1[vMatches12[i].first];
-    const cv::KeyPoint &kp2 = vKeys2[vMatches12[i].second];
+    const cv::KeyPoint &kp1 = vKeys1[vMatches12[i].queryIdx];
+    const cv::KeyPoint &kp2 = vKeys2[vMatches12[i].trainIdx];
     //存储三维点的的坐标
     cv::Mat p3dC1;
 
@@ -1539,7 +1496,7 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
     if(!isfinite(p3dC1.at<float>(0)) || !isfinite(p3dC1.at<float>(1)) || !isfinite(p3dC1.at<float>(2)))
     {
       //其实这里就算是不这样写也没问题，因为默认的匹配点对就不是good点
-      vbGood[vMatches12[i].first]=false;
+      vbGood[vMatches12[i].queryIdx]=false;
       //继续对下一对匹配点的处理
       continue;
     }
@@ -1612,14 +1569,14 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
     // 如果运行到这里就说明当前遍历的这个特征点对靠谱，经过了重重检验，说明是一个合格的点，称之为good点
     vCosParallax.push_back(cosParallax);
     //存储这个三角化测量后的3D点在世界坐标系下的坐标
-    vP3D[vMatches12[i].first] = cv::Point3f(p3dC1.at<float>(0),p3dC1.at<float>(1),p3dC1.at<float>(2));
+    vP3D[vMatches12[i].queryIdx] = cv::Point3f(p3dC1.at<float>(0),p3dC1.at<float>(1),p3dC1.at<float>(2));
     //good点计数++
     nGood++;
 
     //判断视差角，只有视差角稍稍大一丢丢的才会给打good点标记
     //? bug 我觉得这个写的位置不太对。你的good点计数都++了然后才判断，不是会让good点标志和good点计数不一样吗
     if(cosParallax<0.99998)
-      vbGood[vMatches12[i].first]=true;
+      vbGood[vMatches12[i].queryIdx]=true;
   }
 
   // Step 7 得到3D点中较小的视差角，并且转换成为角度制表示
@@ -1652,7 +1609,7 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
  * @param[in & out] R2          旋转矩阵2
  * @param[in & out] t           平移向量，另外一个取相反数
  */
-void Initializer::DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t)
+void Compute_RT::DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t)
 {
 
   // 对本质矩阵进行奇异值分解

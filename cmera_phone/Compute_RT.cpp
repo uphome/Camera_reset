@@ -7,6 +7,7 @@
 #include <vector>
 #include<thread>
 #include <random>
+#include <opencv2/opencv.hpp>
 using namespace std;
 
 void Compute_RT::set_number(float &msigma,
@@ -14,13 +15,17 @@ void Compute_RT::set_number(float &msigma,
                             Mat &K,
                             vector<DMatch> &goodfeatuer,
                             vector<KeyPoint> &rekeypoints,
-                            vector<KeyPoint> &cukeypoints) {
+                            vector<KeyPoint> &cukeypoints,
+                            Mat &refram,
+                            Mat &cefram) {
   mK=K; ///相机内参矩阵
   mvMatches12=goodfeatuer; ///匹配好的特征代点对
   mvKeys1=rekeypoints;  ///参考帧的特征点
   mvKeys2=cukeypoints;  ///当前帧的特征点
   mSigma=msigma; ///投影误差
   mMaxIterations=maxIterations; ///RANSAC迭代次数
+  Reference_Frame=refram; ///参考帧
+  Current_Frame=cefram; ///当前帧
 }
 
 
@@ -1437,6 +1442,8 @@ int Compute_RT::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Key
                          const cv::Mat &K, vector<cv::Point3f> &vP3D, float th2, vector<bool> &vbGood, float &parallax)
 {
   // 对给出的特征点对及其R t , 通过三角化检查解的有效性，也称为 cheirality check
+  namedWindow("匹配",WINDOW_NORMAL);
+  resizeWindow("匹配",500,500);
 
   // Calibration parameters
   //从相机内参数矩阵获取相机的校正参数
@@ -1549,9 +1556,14 @@ int Compute_RT::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Key
     float im1x, im1y;
     //这个使能空间点的z坐标的倒数
     float invZ1 = 1.0/p3dC1.at<float>(2);
+
     //投影到参考帧图像上。因为参考帧下的相机坐标系和世界坐标系重合，因此这里就直接进行投影就可以了
     im1x = fx*p3dC1.at<float>(0)*invZ1+cx;
     im1y = fy*p3dC1.at<float>(1)*invZ1+cy;
+
+    cv::circle(Current_Frame,Point (im1x,im1y),3,Scalar(0, 0, 255), -1);
+    cv::circle(Current_Frame,Point (kp1.pt.x,kp1.pt.y),3,Scalar(255, 255, 0), -1);
+    cv::imshow("匹配",Current_Frame);
 
     //参考帧上的重投影误差，这个的确就是按照定义来的
     float squareError1 = (im1x-kp1.pt.x)*(im1x-kp1.pt.x)+(im1y-kp1.pt.y)*(im1y-kp1.pt.y);

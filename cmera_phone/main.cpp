@@ -91,7 +91,7 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
       good_matches.push_back(matches[i]);
   }
   cout<<"筛选好之后的匹配特征点数目为"<<good_matches.size()<<endl;
-  assert(("筛选好之后的匹配特征点数目小于8对",good_matches.size()>=8));
+  //assert(("筛选好之后的匹配特征点数目小于8对",good_matches.size()>=8));
 
   for(int i =0;i<good_matches.size();i++)
   {
@@ -105,12 +105,40 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   Mat result_new;
   Mat result_old;
   drawMatches(new_image.image,new_image.key_point,old_image.image,old_image.key_point, good_matches,result_img);
-  //drawKeypoints(old_image.image,old_image.key_point,result_old);
-  //drawKeypoints(new_image.image,new_image.key_point,result_new);
+  //drawKeypoints(old_image.image,old_image.key_point,result_old);  //参考帧 照片
+  //drawKeypoints(new_image.image,new_image.key_point,result_new);  //当前帧 视频
+
+
+
+ /* Mat rot_new;
+  Mat rot_old;
+  Mat rot_img;
+
+  vector<KeyPoint> nimg=new_image.key_point;
+  vector<KeyPoint> oimg=old_image.key_point;
+
+  //旋转图片
+  rotate(new_image.image,rot_new,ROTATE_90_CLOCKWISE);
+  rotate(old_image.image,rot_old,ROTATE_90_CLOCKWISE);
+  //keypoiny的坐标旋转
+  for(int i=0;i<=nimg.size();i++)
+  {
+    nimg[i].pt.x=new_image.key_point[i].pt.y;
+    nimg[i].pt.y=new_image.key_point[i].pt.x;
+  }
+
+  for(int i=0;i<=oimg.size();i++)
+  {
+    oimg[i].pt.x=old_image.key_point[i].pt.y;
+    oimg[i].pt.y=old_image.key_point[i].pt.x;
+  }
+
+  drawMatches(rot_new,nimg,rot_old,oimg, good_matches,result_img);
+*/
 
 
   namedWindow("匹配结果",WINDOW_NORMAL);
-  resizeWindow("匹配结果",1000,500);
+  resizeWindow("匹配结果",1000,1000);
   cv::imshow("匹配结果",result_img);
   waitKey(1);
 
@@ -189,9 +217,12 @@ int main() {
   capture.open("/home/hu/下载/VID20230425164019.mp4");
   Mat capture_img;
   Mat tar_img;
-
+  Mat recamera;
+  Mat cecamera;
   //截图
-  intercept(capture);
+
+  //intercept(capture);
+
   tar_img=imread("/home/hu/CLionProjects/cmera_phone/img_phone/img_phone.jpg");
 
 
@@ -212,17 +243,23 @@ int main() {
     feature_points(tar_img,tar_image,"tar");
     good_matches = matching(sou_image, tar_image);
 
-    camera.set_number(msigm,mMaxIterations,K,good_matches,sou_image.key_point,tar_image.key_point);
+    tar_img.copyTo(cecamera);
+    capture_img.copyTo(recamera);
+
+    camera.set_number(msigm,mMaxIterations,K,good_matches,sou_image.key_point,tar_image.key_point,tar_img,capture_img);
     Mat R,T;
     vector<cv::Point3f> vP3D;
     vector<bool> vbTriangulated;
     bool Hu;
+
+
 
     Hu=camera.Initialize(R,T,vP3D,vbTriangulated);
     cout<<Hu<<endl;
     if(Hu)
     {
       cout<<R<<endl;
+
     }
 
     //watermark(capture_img,tar_img);

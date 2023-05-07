@@ -13,7 +13,7 @@ using namespace cv;
 class Compute_RT {
 
  public:
-  void set_number(float &mSigma,int &mMaxIterations,Mat &K,vector<DMatch>&goodfeatuer,vector<KeyPoint> &rekeypoints,vector<KeyPoint> &cukeypoints);
+  void set_number(float &mSigma,int &mMaxIterations,Mat &K,vector<DMatch>&goodfeatuer,vector<KeyPoint> &rekeypoints,vector<KeyPoint> &cukeypoints,Mat &refram,Mat &cefram);
   bool Initialize( cv::Mat &R21, cv::Mat &t21,
                                vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated);
 
@@ -242,5 +242,9 @@ int mMaxIterations;
 /** 二维容器，外层容器的大小为迭代次数，内层容器大小为每次迭代算H或F矩阵需要的点,实际上是八对 */
 vector<vector<size_t> > mvSets;
 
+/** 参考帧        */
+Mat Reference_Frame;
+/** 当前帧        */
+Mat Current_Frame;
 };
 #endif //CMERA_PHONE__COMPUTE_RT_H_

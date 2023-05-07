@@ -1442,8 +1442,8 @@ int Compute_RT::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Key
                          const cv::Mat &K, vector<cv::Point3f> &vP3D, float th2, vector<bool> &vbGood, float &parallax)
 {
   // 对给出的特征点对及其R t , 通过三角化检查解的有效性，也称为 cheirality check
-  namedWindow("匹配",WINDOW_NORMAL);
-  resizeWindow("匹配",500,500);
+ /* namedWindow("匹配",WINDOW_NORMAL);
+  resizeWindow("匹配",500,500);*/
 
   // Calibration parameters
   //从相机内参数矩阵获取相机的校正参数
@@ -1563,7 +1563,7 @@ int Compute_RT::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Key
 
     cv::circle(Current_Frame,Point (im1x,im1y),3,Scalar(0, 0, 255), -1);
     cv::circle(Current_Frame,Point (kp1.pt.x,kp1.pt.y),3,Scalar(255, 255, 0), -1);
-    cv::imshow("匹配",Current_Frame);
+    //cv::imshow("匹配",Current_Frame);
 
     //参考帧上的重投影误差，这个的确就是按照定义来的
     float squareError1 = (im1x-kp1.pt.x)*(im1x-kp1.pt.x)+(im1y-kp1.pt.y)*(im1y-kp1.pt.y);

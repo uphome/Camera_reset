@@ -108,14 +108,10 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   //drawKeypoints(old_image.image,old_image.key_point,result_old);  //参考帧 照片
   //drawKeypoints(new_image.image,new_image.key_point,result_new);  //当前帧 视频
 
-  namedWindow("匹配结果",WINDOW_NORMAL);
-  resizeWindow("匹配结果",1000,1000);
-  cv::imshow("匹配结果",result_img);
-
   Mat rot_new;
   Mat rot_old;
   Mat rot_img;
-
+  Mat rot_result;
   vector<KeyPoint> nimg=new_image.key_point;
   vector<KeyPoint> oimg=old_image.key_point;
 
@@ -129,7 +125,6 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   {
     nimg[i].pt.x=-new_image.key_point[i].pt.y+new_image.image.rows;
     nimg[i].pt.y=new_image.key_point[i].pt.x;
-    cout<<nimg[i].pt.y<<endl;
   }
 
   for(int i=0;i<=oimg.size();i++)
@@ -138,14 +133,20 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
     oimg[i].pt.y=old_image.key_point[i].pt.x;
   }
 
-  drawMatches(rot_new,nimg,rot_old,oimg, good_matches,result_img);
+  drawMatches(rot_new,nimg,rot_old,oimg, good_matches,rot_result);
 
+
+/*
+  namedWindow("匹配结果",WINDOW_NORMAL);
+  resizeWindow("匹配结果",1000,1000);
+  cv::imshow("匹配结果",result_img);
 
 
   namedWindow("旋转之后结果",WINDOW_NORMAL);
   resizeWindow("旋转之后结果",1000,1000);
-  cv::imshow("旋转之后结果",result_img);
+  cv::imshow("旋转之后结果",rot_result);
   waitKey(1);
+*/
 
   return good_matches;
 }

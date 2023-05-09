@@ -8,9 +8,9 @@
 #include<opencv2/opencv.hpp>
 #include <opencv2/features2d.hpp>
 #include <vector>
-#include <cassert>
 #include <opencv2/calib3d.hpp>
-#include <random>
+
+#include "ORBextractor.h"
 #include "Compute_RT.h"
 using namespace ::std;
 using namespace ::cv;
@@ -53,18 +53,36 @@ void intercept(VideoCapture capture)
 void feature_points(Mat met,struct key_img &fe_point,string tag)
 {
   fe_point.image= met;
+  Mat met_ray;
+  Mat mask;
+  Mat img_result;
+  vector<KeyPoint> result_keypoints;
+  Mat descriptors;
+
+
+  cvtColor(met,met_ray,7);
+  ORBextractor Features = ORBextractor(1000, 1.2, 8, 20, 7);
+  Features.operator()(met_ray,mask,result_keypoints,descriptors);
+  fe_point.key_point=result_keypoints;
+  fe_point.dest=descriptors;
+  cout<<descriptors.rows<<endl;
+  descriptors.copyTo(fe_point.dest);
   Mat image_key;
   Mat imamg_result;
   Mat dest;
   Ptr<ORB> orb = ORB::create();
   vector<KeyPoint> key_point;
-  orb->detectAndCompute(fe_point.image, Mat(), fe_point.key_point, fe_point.dest);
+ orb->detectAndCompute(fe_point.image, Mat(), fe_point.key_point, fe_point.dest);
   drawKeypoints(fe_point.image, fe_point.key_point, imamg_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
+cout<<fe_point.dest.rows<<endl;
 
-  /*namedWindow("features_window"+tag, CV_WINDOW_NORMAL);
+  //drawKeypoints(fe_point.image, fe_point.key_point, img_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
+  drawKeypoints(fe_point.image, result_keypoints, img_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
+
+  namedWindow("features_window"+tag, CV_WINDOW_NORMAL);
   resizeWindow("features_window"+tag,500,500);
-  imshow("features_window"+tag,fe_point.image_key);
-  waitKey(1);*/
+  imshow("features_window"+tag,img_result);
+  waitKey(1);
 }
 
 vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
@@ -74,7 +92,6 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   vector<DMatch> matches;
   BFMatcher bf_matcher(NORM_HAMMING);
   bf_matcher.match(new_image.dest,old_image.dest,matches);
-
   double min_dist = 1000, max_dist = 0;
   // 找出所有匹配之间的最大值和最小值
   for (int i = 0; i < new_image.dest.rows; i++)
@@ -104,6 +121,7 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   Mat result_img;
   Mat result_new;
   Mat result_old;
+
   drawMatches(new_image.image,new_image.key_point,old_image.image,old_image.key_point, good_matches,result_img);
   //drawKeypoints(old_image.image,old_image.key_point,result_old);  //参考帧 照片
   //drawKeypoints(new_image.image,new_image.key_point,result_new);  //当前帧 视频
@@ -146,6 +164,7 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   resizeWindow("旋转之后结果",1000,1000);
   cv::imshow("旋转之后结果",rot_result);
   waitKey(1);
+
 */
 
   return good_matches;
@@ -170,17 +189,11 @@ void drawing_rot(vector<Mat>Pose,struct key_img oimg,struct key_img nimg,viz::Vi
 {
   Vector3d euler;
   //euler=Pose[1].eulerAngles(2,1,0);  // ZYX顺序，即先绕x轴roll,再绕y轴pitch,最后绕z轴yaw,0表示X轴,1表示Y轴,2表示Z轴
-
   Matx33f K(477.7987, 0, 323.1992, 0, 477.4408, 240.1797, 0, 0, 1); // 内参矩阵
   viz::Camera mainCamera(K,Size(640,480)); //初始化
-
   viz::WCameraPosition camparmo(mainCamera.getFov(),oimg.image,1.0,viz::Color::white()); // 参数设置
   cv::Affine3f camPosition(Mat::eye(3,3,CV_32F),Vec3f(0,0,0));
  // cv::Affine3f camPosition(Matx33f (1,0,0,0,1,0,0,0,1),Vec3f(0,0,0));
-
-
-
-
   viz::WCameraPosition camparmn(mainCamera.getFov(),nimg.image,1.0,viz::Color::green());
   cv::Affine3d camPosition_2(Pose[0],Pose[1]);
   window.showWidget("oldimage",camparmo,camPosition);
@@ -245,13 +258,16 @@ int main() {
 
     capture>>capture_img;
     capture_img.resize(tar_img.size[0],tar_img.size[1]);
+
     feature_points(capture_img,sou_image,"sou");
     feature_points(tar_img,tar_image,"tar");
+
+
     good_matches = matching(sou_image, tar_image);
+
 
     tar_img.copyTo(cecamera);
     capture_img.copyTo(recamera);
-
     camera.set_number(msigm,mMaxIterations,K,good_matches,sou_image.key_point,tar_image.key_point,tar_img,capture_img);
     Mat R,T;
     vector<cv::Point3f> vP3D;
@@ -261,7 +277,7 @@ int main() {
 
 
     Hu=camera.Initialize(R,T,vP3D,vbTriangulated);
-    cout<<Hu<<endl;
+
     if(Hu)
     {
       cout<<R<<endl;

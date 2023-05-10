@@ -67,6 +67,7 @@ void feature_points(Mat met,struct key_img &fe_point,string tag)
   fe_point.dest=descriptors;
   cout<<descriptors.rows<<endl;
   descriptors.copyTo(fe_point.dest);
+/*
   Mat image_key;
   Mat imamg_result;
   Mat dest;
@@ -75,6 +76,7 @@ void feature_points(Mat met,struct key_img &fe_point,string tag)
  orb->detectAndCompute(fe_point.image, Mat(), fe_point.key_point, fe_point.dest);
   drawKeypoints(fe_point.image, fe_point.key_point, imamg_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
 cout<<fe_point.dest.rows<<endl;
+*/
 
   //drawKeypoints(fe_point.image, fe_point.key_point, img_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
   drawKeypoints(fe_point.image, result_keypoints, img_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
@@ -91,7 +93,9 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   vector<Point2f>maPoint_old,maPoint_new;
   vector<DMatch> matches;
   BFMatcher bf_matcher(NORM_HAMMING);
+
   bf_matcher.match(new_image.dest,old_image.dest,matches);
+
   double min_dist = 1000, max_dist = 0;
   // 找出所有匹配之间的最大值和最小值
   for (int i = 0; i < new_image.dest.rows; i++)
@@ -139,22 +143,22 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   rotate(old_image.image,rot_old,ROTATE_90_CLOCKWISE);
 
   //keypoiny的坐标旋转
-  for(int i=0;i<=nimg.size();i++)
+  for(int i=0;i<nimg.size();i++)
   {
     nimg[i].pt.x=-new_image.key_point[i].pt.y+new_image.image.rows;
     nimg[i].pt.y=new_image.key_point[i].pt.x;
   }
 
-  for(int i=0;i<=oimg.size();i++)
+  for(int i=0;i<oimg.size();i++)
   {
     oimg[i].pt.x=-old_image.key_point[i].pt.y+old_image.image.rows;
     oimg[i].pt.y=old_image.key_point[i].pt.x;
   }
 
   drawMatches(rot_new,nimg,rot_old,oimg, good_matches,rot_result);
+  cout<<"----------"<<endl;
 
 
-/*
   namedWindow("匹配结果",WINDOW_NORMAL);
   resizeWindow("匹配结果",1000,1000);
   cv::imshow("匹配结果",result_img);
@@ -165,7 +169,6 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   cv::imshow("旋转之后结果",rot_result);
   waitKey(1);
 
-*/
 
   return good_matches;
 }
@@ -277,9 +280,10 @@ int main() {
 
 
     Hu=camera.Initialize(R,T,vP3D,vbTriangulated);
-
+    cout<<Hu<<endl;
     if(Hu)
     {
+
       cout<<R<<endl;
 
     }

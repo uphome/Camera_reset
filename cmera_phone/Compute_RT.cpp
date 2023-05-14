@@ -22,7 +22,8 @@ void Compute_RT::set_number(float &msigma,
   mvMatches12=goodfeatuer; ///匹配好的特征代点对
   mvKeys1=rekeypoints;  ///参考帧的特征点
   mvKeys2=cukeypoints;  ///当前帧的特征点
-  mSigma=msigma; ///投影误差
+  mSigma=msigma;///投影误差
+  mSigma2=msigma*msigma;
   mMaxIterations=maxIterations; ///RANSAC迭代次数
   Reference_Frame=refram; ///参考帧
   Current_Frame=cefram; ///当前帧
@@ -116,6 +117,7 @@ bool Compute_RT::Initialize( cv::Mat &R21, cv::Mat &t21,
   // Step 4 计算得分比例来判断选取哪个模型来求位姿R,t
   //通过这个规则来判断谁的评分占比更多一些，注意不是简单的比较绝对评分大小，而是看评分的占比
   float RH = SH/(SH+SF);			//RH=Ratio of Homography
+ cout<<"RH的值为"<<RH<<endl;
 
   // Try to reconstruct from homography or fundamental depending on the ratio (0.40-0.45)
   // 注意这里更倾向于用H矩阵恢复位姿。如果单应矩阵的评分占比达到了0.4以上,则从单应矩阵恢复运动,否则从基础矩阵恢复运动
@@ -130,7 +132,7 @@ bool Compute_RT::Initialize( cv::Mat &R21, cv::Mat &t21,
                         1.0,				//这个对应的形参为minParallax，即认为某对特征点的三角化测量中，认为其测量有效时
         //需要满足的最小视差角（如果视差角过小则会引起非常大的观测误差）,单位是角度
                         50);				//为了进行运动恢复，所需要的最少的三角化测量成功的点个数
-  else //if(pF_HF>0.6)
+  else
     // 更偏向于非平面，从基础矩阵恢复
     return ReconstructF(vbMatchesInliersF,F,mK,R21,t21,vP3D,vbTriangulated,1.0,50);
 
@@ -1244,6 +1246,8 @@ bool Compute_RT::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::
       // 说明当前组解是历史次优点，更新之
       secondBestGood = nGood;
     }
+
+
   }
 
 
@@ -1253,10 +1257,11 @@ bool Compute_RT::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::
   // 2. 视角差大于规定的阈值
   // 3. good点数要大于规定的最小的被三角化的点数量
   // 4. good数要足够多，达到总数的90%以上
-  if(secondBestGood<0.75*bestGood &&
-      bestParallax>=minParallax &&
-      bestGood>minTriangulated &&
-      bestGood>0.9*N)
+  if(//secondBestGood<0.75*bestGood &&
+      //bestParallax>=minParallax
+      //&&bestGood>minTriangulated
+      //&&bestGood>0.5*N
+      1)
   {
     // 从最佳的解的索引访问到R，t
     vR[bestSolutionIdx].copyTo(R21);
@@ -1561,13 +1566,13 @@ int Compute_RT::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Key
     im1x = fx*p3dC1.at<float>(0)*invZ1+cx;
     im1y = fy*p3dC1.at<float>(1)*invZ1+cy;
 
-    cv::circle(Current_Frame,Point (im1x,im1y),3,Scalar(0, 0, 255), -1);
-    cv::circle(Current_Frame,Point (kp1.pt.x,kp1.pt.y),3,Scalar(255, 255, 0), -1);
-    cv::line(Current_Frame,Point (im1x,im1y), Point (kp1.pt.x,kp1.pt.y),Scalar(0,255,0),1);
-    cv::imshow("匹配",Current_Frame);
+    //cv::circle(Current_Frame,Point (im1x,im1y),3,Scalar(0, 0, 255), -1);
+    //cv::circle(Current_Frame,Point (kp1.pt.x,kp1.pt.y),3,Scalar(255, 255, 0), -1);
+    //cv::line(Current_Frame,Point (im1x,im1y), Point (kp1.pt.x,kp1.pt.y),Scalar(0,255,0),1);
+    //cv::imshow("匹配",Current_Frame);
     waitKey(1);
     //参考帧上的重投影误差，这个的确就是按照定义来的
-    float squareError1 = (im1x-kp1.pt.x)*(im1x-kp1.pt.x)+(im1y-kp1.pt.y)*(im1y-kp1.pt.y);
+    float squareError1 = (im1x-kp1.pt.x)*(im1x-kp1.pt.x)+(im1y-kp1.pt.y)*(im1y-kp1.pt.y)-1;
 
     // 重投影误差太大，跳过淘汰
     if(squareError1>th2)

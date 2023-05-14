@@ -33,7 +33,7 @@ void intercept(VideoCapture capture)
   {
     capture>>img;
    // img.resize(3468,3468);
-    img.resize(480,640);
+   // img.resize(480,640);
     namedWindow("choose",WINDOW_NORMAL);
     resizeWindow("choose",500,500);
     imshow("choose",img);
@@ -65,8 +65,6 @@ void feature_points(Mat met,struct key_img &fe_point,string tag)
   Features.operator()(met_ray,mask,result_keypoints,descriptors);
   fe_point.key_point=result_keypoints;
   fe_point.dest=descriptors;
-  cout<<descriptors.rows<<endl;
-  descriptors.copyTo(fe_point.dest);
 /*
   Mat image_key;
   Mat imamg_result;
@@ -79,12 +77,12 @@ cout<<fe_point.dest.rows<<endl;
 */
 
   //drawKeypoints(fe_point.image, fe_point.key_point, img_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
-  drawKeypoints(fe_point.image, result_keypoints, img_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
-
+  //drawKeypoints(fe_point.image, result_keypoints, img_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
+/*
   namedWindow("features_window"+tag, CV_WINDOW_NORMAL);
   resizeWindow("features_window"+tag,500,500);
   imshow("features_window"+tag,img_result);
-  waitKey(1);
+  waitKey(1);*/
 }
 
 vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
@@ -114,7 +112,7 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   cout<<"筛选好之后的匹配特征点数目为"<<good_matches.size()<<endl;
   //assert(("筛选好之后的匹配特征点数目小于8对",good_matches.size()>=8));
 
-  for(int i =0;i<good_matches.size();i++)
+  /*for(int i =0;i<good_matches.size();i++)
   {
     maPoint_new.push_back(new_image.key_point[good_matches[i].queryIdx].pt);
     maPoint_old.push_back(old_image.key_point[good_matches[i].trainIdx].pt);
@@ -156,7 +154,7 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   }
 
   drawMatches(rot_new,nimg,rot_old,oimg, good_matches,rot_result);
-  cout<<"----------"<<endl;
+
 
 
   namedWindow("匹配结果",WINDOW_NORMAL);
@@ -169,7 +167,7 @@ vector<DMatch> matching(struct key_img new_image, struct key_img old_image)
   cv::imshow("旋转之后结果",rot_result);
   waitKey(1);
 
-
+*/
   return good_matches;
 }
 
@@ -188,21 +186,22 @@ vector<Mat> calmatrix(vector<vector<cv::Point2f>> mpoint)
 
 }
 
-void drawing_rot(vector<Mat>Pose,struct key_img oimg,struct key_img nimg,viz::Viz3d window)
+void drawing_rot(vector<Mat>Pose,struct key_img &oimg,struct key_img &nimg,viz::Viz3d &window)
 {
+  Pose[0]=Pose[0];
   Vector3d euler;
+
   //euler=Pose[1].eulerAngles(2,1,0);  // ZYX顺序，即先绕x轴roll,再绕y轴pitch,最后绕z轴yaw,0表示X轴,1表示Y轴,2表示Z轴
   Matx33f K(477.7987, 0, 323.1992, 0, 477.4408, 240.1797, 0, 0, 1); // 内参矩阵
   viz::Camera mainCamera(K,Size(640,480)); //初始化
   viz::WCameraPosition camparmo(mainCamera.getFov(),oimg.image,1.0,viz::Color::white()); // 参数设置
   cv::Affine3f camPosition(Mat::eye(3,3,CV_32F),Vec3f(0,0,0));
- // cv::Affine3f camPosition(Matx33f (1,0,0,0,1,0,0,0,1),Vec3f(0,0,0));
   viz::WCameraPosition camparmn(mainCamera.getFov(),nimg.image,1.0,viz::Color::green());
-  cv::Affine3d camPosition_2(Pose[0],Pose[1]);
+  cv::Affine3f camPosition_2(Pose[0],Pose[1]);
   window.showWidget("oldimage",camparmo,camPosition);
   window.showWidget("newimage",camparmn,camPosition_2);
 
-
+  window.spinOnce();
 
 }
 
@@ -220,6 +219,21 @@ void  watermark(Mat src1,Mat src2)
   waitKey(1);
 
 }
+bool epipolarConstraintCheck(Mat CameraK, vector<Point2f>& p1s, vector<Point2f>& p2s, Mat R, Mat t)
+{
+
+  for(int i = 0; i < p1s.size(); i++)
+  {
+    Mat y1 = (Mat_<double>(3,1)<<p1s[i].x, p1s[i].y, 1);
+    Mat y2 = (Mat_<double>(3,1)<<p2s[i].x, p2s[i].y, 1);
+    //T 的反对称矩阵
+    Mat t_x = (Mat_<double>(3,3)<< 0, -t.at<double>(2,0), t.at<double>(1,0),
+        t.at<double>(2,0), 0, -t.at<double>(0,0),
+        -t.at<double>(1,0),t.at<double>(0,0),0);
+    Mat d = y2.t() * CameraK.inv().t() * t_x * R * CameraK.inv()* y1;
+    cout<<"epipolar constraint = "<<d<<endl;
+  }
+}
 
 
 int main() {
@@ -234,23 +248,22 @@ int main() {
  // 引入摄像头
   Mat frame;
   VideoCapture capture;
- // capture.open("http://admin:123456@192.168.73.14:8081");
+  //capture.open("http://admin:123456@192.168.1.101:8081");
 
-  capture.open("/home/hu/下载/VID20230425164019.mp4");
+  capture.open("/home/hu/下载/VID20230513211359.mp4");
   Mat capture_img;
   Mat tar_img;
-  Mat recamera;
-  Mat cecamera;
+
   //截图
 
   //intercept(capture);
 
   tar_img=imread("/home/hu/CLionProjects/cmera_phone/img_phone/img_phone.jpg");
 
-
   Compute_RT camera;
   float msigm=1;
   int mMaxIterations=200;
+  Mat R,T;
   K.convertTo(K,CV_32F);
 
 
@@ -267,12 +280,9 @@ int main() {
 
 
     good_matches = matching(sou_image, tar_image);
-
-
-    tar_img.copyTo(cecamera);
-    capture_img.copyTo(recamera);
     camera.set_number(msigm,mMaxIterations,K,good_matches,sou_image.key_point,tar_image.key_point,tar_img,capture_img);
-    Mat R,T;
+
+
     vector<cv::Point3f> vP3D;
     vector<bool> vbTriangulated;
     bool Hu;
@@ -280,20 +290,30 @@ int main() {
 
 
     Hu=camera.Initialize(R,T,vP3D,vbTriangulated);
-    cout<<Hu<<endl;
-    if(Hu)
+    if (R.empty())
     {
-
-      cout<<R<<endl;
+      cout<<"程序跳出"<<endl;
+      continue;
 
     }
-
+    cout<<R<<endl;
+    Pose.push_back(R);
+    Pose.push_back(T);
+    drawing_rot(Pose,tar_image,sou_image,window);
     //watermark(capture_img,tar_img);
-    //window.spinOnce();
+    vector<Point2f>maPoint_old,maPoint_new;
+    for(int i =0;i<good_matches.size();i++)
+{
+  maPoint_new.push_back(sou_image.key_point[good_matches[i].queryIdx].pt);
+  maPoint_old.push_back(tar_image.key_point[good_matches[i].trainIdx].pt);
+}
 
 
 
-  }
+
+
+
+}
 
 
 

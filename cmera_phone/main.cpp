@@ -77,8 +77,7 @@ cout<<fe_point.dest.rows<<endl;
 */
 
   //drawKeypoints(fe_point.image, fe_point.key_point, img_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
-  //drawKeypoints(fe_point.image, result_keypoints, img_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
-/*
+/*  drawKeypoints(fe_point.image, result_keypoints, img_result, Scalar(0, 255, 0), DrawMatchesFlags::DEFAULT);
   namedWindow("features_window"+tag, CV_WINDOW_NORMAL);
   resizeWindow("features_window"+tag,500,500);
   imshow("features_window"+tag,img_result);
@@ -239,7 +238,7 @@ bool epipolarConstraintCheck(Mat CameraK, vector<Point2f>& p1s, vector<Point2f>&
 int main() {
   Mat K = (Mat_<double>(3, 3) << 477.7987, 0, 323.1992, 0, 477.4408, 240.1797, 0, 0, 1);
 
-  viz::Viz3d window("camere pose");
+  viz::Viz3d window("Camere pose");
   key_img sou_image, tar_image;
   vector<vector<Point2f>> mPoint;
   vector<Mat> Pose;
@@ -250,22 +249,27 @@ int main() {
   VideoCapture capture;
   //capture.open("http://admin:123456@192.168.1.101:8081");
 
-  capture.open("/home/hu/下载/VID20230513211359.mp4");
+  capture.open("/home/hu/视频/VID20230516160750.mp4");
   Mat capture_img;
   Mat tar_img;
 
   //截图
+  intercept(capture);
 
-  //intercept(capture);
 
   tar_img=imread("/home/hu/CLionProjects/cmera_phone/img_phone/img_phone.jpg");
 
   Compute_RT camera;
   float msigm=1;
-  int mMaxIterations=200;
-  Mat R,T;
+  int mMaxIterations=400;
+
+  int r[3][3]={1,0,0,0,1,0,0,0,1};
+  int t[3]={0,0,0};
+  Mat R (3,3,CV_32F,r);
+  Mat T (3,1,CV_32F,t);
   K.convertTo(K,CV_32F);
 
+  Mat R1,T1;
 
   //开始处理图片
   while (1)
@@ -285,28 +289,23 @@ int main() {
 
     vector<cv::Point3f> vP3D;
     vector<bool> vbTriangulated;
-    bool Hu;
+    camera.Initialize(R1,T1,vP3D,vbTriangulated);
 
-
-
-    Hu=camera.Initialize(R,T,vP3D,vbTriangulated);
-    if (R.empty())
+    if (R1.empty()&&T1.empty())
     {
       cout<<"程序跳出"<<endl;
       continue;
-
     }
+
+    R1.convertTo(R,CV_32F);
+    T1.convertTo(T,CV_32F);
+
     cout<<R<<endl;
     Pose.push_back(R);
     Pose.push_back(T);
+
     drawing_rot(Pose,tar_image,sou_image,window);
     //watermark(capture_img,tar_img);
-    vector<Point2f>maPoint_old,maPoint_new;
-    for(int i =0;i<good_matches.size();i++)
-{
-  maPoint_new.push_back(sou_image.key_point[good_matches[i].queryIdx].pt);
-  maPoint_old.push_back(tar_image.key_point[good_matches[i].trainIdx].pt);
-}
 
 
 

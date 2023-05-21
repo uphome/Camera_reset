@@ -106,6 +106,8 @@ bool Compute_RT::Initialize( cv::Mat &R21, cv::Mat &t21,
   F.convertTo(F,CV_32F);
 
   FindHomography(vbMatchesInliersH,SH,H);
+
+
 						//输出，计算的单应矩阵结果
   // 计算fundamental matrix并打分，参数定义和H是一样的，这里不再赘述
   FindFundamental(vbMatchesInliersF,SF,F);
@@ -131,12 +133,11 @@ bool Compute_RT::Initialize( cv::Mat &R21, cv::Mat &t21,
                         vbTriangulated,		//特征点对是否成功三角化的标记
                         1.0,				//这个对应的形参为minParallax，即认为某对特征点的三角化测量中，认为其测量有效时
         //需要满足的最小视差角（如果视差角过小则会引起非常大的观测误差）,单位是角度
-                        50);				//为了进行运动恢复，所需要的最少的三角化测量成功的点个数
+                        1);				//为了进行运动恢复，所需要的最少的三角化测量成功的点个数
   else
-    // 更偏向于非平面，从基础矩阵恢复
-    return ReconstructF(vbMatchesInliersF,F,mK,R21,t21,vP3D,vbTriangulated,1.0,50);
+    // 更偏向于非平面，从基础矩阵恢
+    return ReconstructF(vbMatchesInliersF,F,mK,R21,t21,vP3D,vbTriangulated,1.0,1);
 
-  //一般地程序不应该执行到这里，如果执行到这里说明程序跑飞了
   return false;
 }
 
@@ -869,27 +870,22 @@ bool Compute_RT::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv::
 
   // Step 4.3 确定最小的可以三角化的点数
   // 在0.9倍的内点数 和 指定值minTriangulated =50 中取最大的，也就是说至少50个
-  int nMinGood = max(static_cast<int>(0.9*N), minTriangulated);
-
+  int nMinGood = max(static_cast<int>(0.1*N), minTriangulated);
+  cout<<"maxGood "<<maxGood<<endl;
+  cout<<"nMingGood "<<nMinGood<<endl;
   // 统计四组解中重建的有效3D点个数 > 0.7 * maxGood 的解的数目
   // 如果有多个解同时满足该条件，认为结果太接近，nsimilar++，nsimilar>1就认为有问题了，后面返回false
   int nsimilar = 0;
-  if(nGood1>0.7*maxGood)
-    nsimilar++;
-  if(nGood2>0.7*maxGood)
-    nsimilar++;
-  if(nGood3>0.7*maxGood)
-    nsimilar++;
-  if(nGood4>0.7*maxGood)
-    nsimilar++;
-
   // Step 4.4 四个结果中如果没有明显的最优结果，或者没有足够数量的三角化点，则返回失败
   // 条件1: 如果四组解能够重建的最多3D点个数小于所要求的最少3D点个数（mMinGood），失败
   // 条件2: 如果存在两组及以上的解能三角化出 >0.7*maxGood的点，说明没有明显最优结果，失败
-  if(maxGood<nMinGood || nsimilar>1)
+
+  if(maxGood<nMinGood||maxGood==0 )
   {
+    cout<<"maxGood<nMinGood "<<endl;
     return false;
   }
+
 
 
   //  Step 4.5 选择最佳解记录结果
@@ -950,6 +946,7 @@ bool Compute_RT::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv::
     }
   }
 
+  cout<<"不满足对应的parallax>minParallax"<<endl;
   // 如果有最优解但是不满足对应的parallax>minParallax，那么返回false表示求解失败
   return false;
 }
@@ -992,7 +989,7 @@ bool Compute_RT::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::
   for(size_t i=0, iend = vbMatchesInliers.size() ; i<iend; i++)
     if(vbMatchesInliers[i])
       N++;
-
+  cout<<"匹配的特征点对中属于内点 "<<N<<endl;
   // We recover 8 motion hypotheses using the method of Faugeras et al.
   // Motion and structure from motion in a piecewise planar environment.
   // International Journal of Pattern Recognition and Artificial Intelligence, 1988
@@ -1258,10 +1255,10 @@ bool Compute_RT::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::
   // 3. good点数要大于规定的最小的被三角化的点数量
   // 4. good数要足够多，达到总数的90%以上
   if(//secondBestGood<0.75*bestGood &&
-      //bestParallax>=minParallax
-      //&&bestGood>minTriangulated
+      bestParallax>=minParallax
+      &&bestGood>minTriangulated
       //&&bestGood>0.5*N
-      1)
+      )
   {
     // 从最佳的解的索引访问到R，t
     vR[bestSolutionIdx].copyTo(R21);
@@ -1544,7 +1541,7 @@ int Compute_RT::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Key
     // ?视差比较小时，重投影误差比较大。这里0.99998 对应的角度为0.36°,这里不应该是 cosParallax>0.99998 吗？
     // ?因为后面判断vbGood 点时的条件也是 cosParallax<0.99998
     // !可能导致初始化不稳定
-    if(p3dC1.at<float>(2)<=0 && cosParallax<0.99998)
+    if(p3dC1.at<float>(2)<=0 && cosParallax<0.99998) //视差比较小时，重投影误差比较大。
       continue;
 
     // Check depth in front of second camera (only if enough parallax, as "infinite" points can easily go to negative depth)
@@ -1566,14 +1563,14 @@ int Compute_RT::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Key
     im1x = fx*p3dC1.at<float>(0)*invZ1+cx;
     im1y = fy*p3dC1.at<float>(1)*invZ1+cy;
 
-    //cv::circle(Current_Frame,Point (im1x,im1y),3,Scalar(0, 0, 255), -1);
+   // cv::circle(Current_Frame,Point (im1x,im1y),3,Scalar(0, 0, 255), -1);
     //cv::circle(Current_Frame,Point (kp1.pt.x,kp1.pt.y),3,Scalar(255, 255, 0), -1);
-    //cv::line(Current_Frame,Point (im1x,im1y), Point (kp1.pt.x,kp1.pt.y),Scalar(0,255,0),1);
-    //cv::imshow("匹配",Current_Frame);
+   // cv::line(Current_Frame,Point (im1x,im1y), Point (kp1.pt.x,kp1.pt.y),Scalar(0,255,0),1);
+   // cv::imshow("匹配",Current_Frame);
     waitKey(1);
     //参考帧上的重投影误差，这个的确就是按照定义来的
     float squareError1 = (im1x-kp1.pt.x)*(im1x-kp1.pt.x)+(im1y-kp1.pt.y)*(im1y-kp1.pt.y)-1;
-
+    //cout<<"squareError1 "<< squareError1<<endl;
     // 重投影误差太大，跳过淘汰
     if(squareError1>th2)
       continue;
@@ -1587,14 +1584,16 @@ int Compute_RT::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Key
     im2y = fy*p3dC2.at<float>(1)*invZ2+cy;
 
     // 计算重投影误差
-    float squareError2 = (im2x-kp2.pt.x)*(im2x-kp2.pt.x)+(im2y-kp2.pt.y)*(im2y-kp2.pt.y);
 
+    float squareError2 = (im2x-kp2.pt.x)*(im2x-kp2.pt.x)+(im2y-kp2.pt.y)*(im2y-kp2.pt.y);
+    //cout<<"squareError2 "<< squareError2<<endl;
     // 重投影误差太大，跳过淘汰
     if(squareError2>th2)
       continue;
 
     // Step 6 统计经过检验的3D点个数，记录3D点视差角
     // 如果运行到这里就说明当前遍历的这个特征点对靠谱，经过了重重检验，说明是一个合格的点，称之为good点
+
     vCosParallax.push_back(cosParallax);
     //存储这个三角化测量后的3D点在世界坐标系下的坐标
     vP3D[vMatches12[i].queryIdx] = cv::Point3f(p3dC1.at<float>(0),p3dC1.at<float>(1),p3dC1.at<float>(2));
